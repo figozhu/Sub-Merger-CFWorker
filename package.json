@@ -1,0 +1,17 @@
+{
+  "name": "sub-merger",
+  "scripts": {
+    "dev": "wrangler dev src/index.tsx --test-scheduled",
+    "deploy": "wrangler deploy --minify src/index.tsx"
+  },
+  "dependencies": {
+    "axios": "^1.7.5",
+    "dayjs": "^1.11.13",
+    "hono": "^4.5.8",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240821.1",
+    "wrangler": "^3.72.3"
+  }
+}

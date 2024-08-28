@@ -1,0 +1,47 @@
+name = "sub-merger"
+compatibility_date = "2024-08-26"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+PASSWORD = "123456"
+SALT = "some_random_salt"
+TABLENAME = "dbSUB"
+MAGIC = "magic"
+UA = "clash-verge/v1.7.7"
+PROXY = ""
+INSTANT_REFRESH_INTERVAL = "300"
+
+[vars.ONETIME_PATTERN]
+EXCLUDE_PATTERN = "剩余流量|距离下次|套餐|官网|刷新|购买|余额|失联"
+OTHER_PATTERN = ""
+STEAM_PATTERN = ""
+TELEGRAM_PATTERN = ""
+TWITTER_PATTERN = ""
+YOUTUBE_PATTERN = ""
+
+[vars.SUBSCRIBE_PATTERN]
+EXCLUDE_PATTERN = "剩余流量|距离下次|套餐|官网|刷新|购买|余额|失联"
+OTHER_PATTERN = ""
+STEAM_PATTERN = ""
+TELEGRAM_PATTERN = ""
+TWITTER_PATTERN = ""
+YOUTUBE_PATTERN = ""
+
+[triggers]
+crons = ["0 */1 * * *"]
+
+[[kv_namespaces]]
+binding = "SUB_MERGER_KV"
+id = ""
+
+# [[r2_buckets]]
+# binding = "MY_BUCKET"
+# bucket_name = "my-bucket"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "my-database"
+# database_id = ""
+
+# [ai]
+# binding = "AI"
