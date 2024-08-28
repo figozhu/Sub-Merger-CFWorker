@@ -8,7 +8,6 @@ SALT = "some_random_salt"
 TABLENAME = "dbSUB"
 MAGIC = "magic"
 UA = "clash-verge/v1.7.7"
-PROXY = ""
 INSTANT_REFRESH_INTERVAL = "300"
 
 [vars.ONETIME_PATTERN]

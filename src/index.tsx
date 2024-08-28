@@ -9,15 +9,13 @@ import {
 
 import dayjs from 'dayjs'
 
+import { SubscriptionType, SubUserInfo, FinalObj } from './types/types.d.ts'
+
 import { generatePasswordHash } from './utils/passwordMgr'
-import getSubscribeYaml from './utils/getSubscribeYaml'
+import {getSubscribeYaml, generateSubscriptionUserInfoString} from './utils/getSubscribeYaml'
 import generateProxyConfigYaml from './utils/generateProxyConfigYaml'
 import { getDefaultYaml } from './data/defaultYmal'
 
-enum SubscriptionType {
-  Monthly = "包年/包月",
-  TrafficPackage = "流量包"
-}
 
 type Bindings = {
   SUB_MERGER_KV: KVNamespace
@@ -26,7 +24,6 @@ type Bindings = {
   TABLENAME: string
   MAGIC: string
   UA: string
-  PROXY: string
   INSTANT_REFRESH_INTERVAL: string
   ONETIME_PATTERN: {
     EXCLUDE_PATTERN: string
@@ -272,45 +269,56 @@ const authMiddleware = async (c, next) => {
 app.use('/dashboard', authMiddleware)
 app.use('/api/*', authMiddleware)
 
-async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noCache: boolean = false) {
+async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noCache: boolean = false): Promise<FinalObj> {
   console.debug("GetSubYamlWithCache, subType=", subType, "noCache=", noCache)
 
-  const cacheKey = `${env.TABLENAME}:cache:${subType}`
+  const cacheKey = `${env.TABLENAME}:cacheObj:${subType}`
 
   if (!noCache) {
     // 优先从缓存中获取
     console.debug("优先从缓存中获取")
-    const subYaml = await env.SUB_MERGER_KV.get(cacheKey)
-    if (subYaml) {
+    const subCacheObj = await env.SUB_MERGER_KV.get(cacheKey, "json")
+    if (subCacheObj) {
       console.debug("从缓存中获取成功")
-      return subYaml
+      return subCacheObj
     }
   }
 
-  let finalYaml = ''
+  const finalObj: FinalObj = {
+    subUserInfo: {
+      upload: 0,
+        download: 0,
+        total: 0,
+        expire: 9999999999,
+    },
+    finalYaml: '',
+  }
 
   // 没有缓存，或者要求不从缓存获取
   const subData = await env.SUB_MERGER_KV.get(env.TABLENAME, "json")
   if (!subData) {
     // 没有配置订阅源
-    return '# 没有配置订阅源'
+    finalObj.finalYaml = '# 没有配置订阅源'
+    return finalObj
   }
 
   const allTarget = subData.filter(sub => sub.subType === subType)
   if (allTarget.length === 0) {
     // 没有匹配类型的订阅源
-    return '# 没有匹配类型的订阅源'
+    finalObj.finalYaml = `# 没有配置该类型的订阅源：${subType}`
+    return finalObj
   }
 
-  const totalNode = await getSubscribeYaml(allTarget, env.UA, env.PROXY)
+  const [subuserInfo, totalNode] = await getSubscribeYaml(allTarget, env.UA)
   const proxyCfgYaml = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
   const defaultYaml = getDefaultYaml()
-  finalYaml = proxyCfgYaml + defaultYaml
+  finalObj.finalYaml = proxyCfgYaml + defaultYaml
+  finalObj.subUserInfo = subuserInfo
 
   // 设置缓存
-  await env.SUB_MERGER_KV.put(cacheKey, finalYaml)
+  await env.SUB_MERGER_KV.put(cacheKey, JSON.stringify(finalObj))
 
-  return finalYaml
+  return finalObj
 }
 
 app.get('/onetime/:magic', async (c) => {
@@ -334,13 +342,14 @@ app.get('/onetime/:magic', async (c) => {
     "currTimeStamp=", currTimeStamp, "lastAccessTimeStamp=", lastAccessTimeStamp, "diff=", diff)
 
   // 获取订阅数据
-  const finalYaml = await GetSubYamlWithCache(subType, c.env, noCache)
+  const finalObj = await GetSubYamlWithCache(subType, c.env, noCache)
 
   // 更新访问时间
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
 
-  return c.text(finalYaml)
+  c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
+  return c.text(finalObj.finalYaml)
 })
 
 app.get('/subscribe/:magic', async (c) => {
@@ -364,13 +373,14 @@ app.get('/subscribe/:magic', async (c) => {
     "currTimeStamp=", currTimeStamp, "lastAccessTimeStamp=", lastAccessTimeStamp, "diff=", diff)
 
   // 获取订阅数据
-  const finalYaml = await GetSubYamlWithCache(subType, c.env, noCache)
+  const finalObj = await GetSubYamlWithCache(subType, c.env, noCache)
 
   // 更新访问时间
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
 
-  return c.text(finalYaml)
+  c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
+  return c.text(finalObj.finalYaml)
 })
 
 app.get('/', (c) => { 
