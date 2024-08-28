@@ -1,11 +1,13 @@
 # Sub-Merger-CFWorker
-订阅合并（基于CF Worker）
+基于CF Worker的Clash系软件的订阅合并，增加分流配置
 
 优势：
  - 无论订阅地址是否被墙，CF的节点都是可以去拉取的
  - 你的Worker绑一个没被墙的域名，就可以无需代理更新订阅配置了
 
-注意：
+
+**注意：**
+
 现在分流配置是我写死的，如果你有不同的需求，请fork了代码，自行修改
 
 
@@ -17,6 +19,7 @@ pnpm install
 
 ```
 
+
 2. 启动本地服务器
 
 ```
@@ -27,6 +30,7 @@ pnpm run dev
 # 部署到CF
 
 1. 把`wrangler.toml.template`复制为`wrangler.toml`，并修改其中的配置
+
 
 2. 推送到CF
 ```
@@ -49,7 +53,6 @@ pnpm run deploy
 | TABLENAME | KV存储表名（前缀） |
 | MAGIC | 订阅链接中的魔法字符串 |
 | UA | 请求订阅时使用的User-Agent |
-| PROXY | 请求订阅时使用的代理（可选） |
 | EXCLUDE_PATTERN | 排除节点的正则表达式 |
 | OTHER_PATTERN | 其他类型节点的正则表达式 |
 | YOUTUBE_PATTERN | YouTube节点的正则表达式 |
