@@ -143,6 +143,7 @@ rules:
 
   # 进程
   - PROCESS-NAME,ClubGG.exe,GameSteam
+  - PROCESS-NAME,ClubGG,GameSteam
   - PROCESS-NAME,v2ray,DIRECT
   - PROCESS-NAME,xray,DIRECT
   - PROCESS-NAME,naive,DIRECT
@@ -204,7 +205,7 @@ rules:
   - RULE-SET,Claude,其它流量
   - RULE-SET,Google,其它流量
   - RULE-SET,GitHub,其它流量
-  - RULE-SET,Apple,其它流量
+  - RULE-SET,Apple,直接连接
   - RULE-SET,Youtube,MediaYouTube
   - RULE-SET,Twitter,MediaTwitter
   - RULE-SET,Telegram,MediaTelegram
