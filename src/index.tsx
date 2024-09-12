@@ -312,7 +312,7 @@ async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noC
   const [subuserInfo, totalNode] = await getSubscribeYaml(allTarget, env.UA)
   const proxyCfgYaml = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
   const defaultYaml = getDefaultYaml()
-  finalObj.finalYaml = proxyCfgYaml + defaultYaml
+  finalObj.finalYaml = `#最后更新时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}\n\n` + proxyCfgYaml + defaultYaml
   finalObj.subUserInfo = subuserInfo
 
   // 设置缓存

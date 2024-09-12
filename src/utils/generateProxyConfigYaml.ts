@@ -16,6 +16,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   const twitterNodes = filterNodes(allowNodes, envConfig.TWITTER_PATTERN || '', false);
   const telegramNodes = filterNodes(allowNodes, envConfig.TELEGRAM_PATTERN || '', false);
   const steamNodes = filterNodes(allowNodes, envConfig.STEAM_PATTERN || '', false);
+  const fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_PATTERN || '', false);
 
   // 生成 proxy-groups 配置
   const proxyGroups = [
@@ -52,6 +53,13 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
         url: 'http://www.google.com/generate_204',
         interval: 1800,
     },
+    {
+      name: '故障转移',
+      type: 'fallback',
+      proxies: fallbackNodes.map((node: any) => node.name),
+      url: 'http://www.google.com/generate_204',
+      interval: 1800,
+  },
     {
         name: '直接连接',
         type: 'select',
