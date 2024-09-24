@@ -24,6 +24,8 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
         name: '其它流量',
         type: 'select',
         proxies: otherNodes.map((node: any) => node.name),
+        url: 'http://www.google.com/generate_204',
+        interval: 1800,
     },
     {
       name: 'GameSteam',
@@ -59,7 +61,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
       proxies: fallbackNodes.map((node: any) => node.name),
       url: 'http://www.google.com/generate_204',
       interval: 1800,
-  },
+    },
     {
         name: '直接连接',
         type: 'select',
