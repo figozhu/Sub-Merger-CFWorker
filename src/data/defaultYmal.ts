@@ -201,6 +201,10 @@ rules:
   - DOMAIN-SUFFIX,api2d.net,直接连接
   - DOMAIN-SUFFIX,appstorrent.ru,其它流量
 
+  # EMBY公益服
+  - DOMAIN-SUFFIX,123456.al,MediaYouTube
+  
+
   - RULE-SET,OpenAI,其它流量
   - RULE-SET,Claude,其它流量
   - RULE-SET,Google,其它流量
