@@ -26,13 +26,14 @@
 
 
 
-| 机场名       | 价格                                   | 注册网址                    |
-| ------------ | -------------------------------------- | --------------------------- |
-| 東京国際空港 | ￥12/年（30G/月）                      | https://s.wzsd.us.kg/HYJQwH |
-| 804Cloud     | ￥2/100G/月、￥5/300G/月、￥15/无限/月 | https://s.wzsd.us.kg/dhPBJ5 |
-| FashSoks     | ￥3.99/500G/月                         | https://s.wzsd.us.kg/RHXYXf |
-| 极速机场     | ￥12/年（200G/月）                     | https://s.wzsd.us.kg/acGmMz |
-| Needay       | ￥13/年（300G/月）                     | https://s.wzsd.us.kg/2SZsZS |
+| 机场名       | 价格                                                  | 注册网址                    |
+| ------------ | ----------------------------------------------------- | --------------------------- |
+| 東京国際空港 | ￥12/年（30G/月）                                     | https://s.wzsd.us.kg/HYJQwH |
+| 十元一年     | ￥9.9/年（100G/月），￥299.99/终身（6折券：LYcPG0Ik） | https://s.wzsd.us.kg/FwmBCw |
+| 804Cloud     | ￥2/100G/月、￥5/300G/月、￥15/无限/月                | https://s.wzsd.us.kg/dhPBJ5 |
+| FashSoks     | ￥3.99/500G/月                                        | https://s.wzsd.us.kg/RHXYXf |
+| 极速机场     | ￥12/年（200G/月）                                    | https://s.wzsd.us.kg/acGmMz |
+| Needay       | ￥13/年（300G/月）                                    | https://s.wzsd.us.kg/2SZsZS |
 
 
 
