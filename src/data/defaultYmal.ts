@@ -198,7 +198,7 @@ rules:
   - DOMAIN-KEYWORD,clubgg,GameSteam
 
   # EMBY公益服
-  - DOMAIN-SUFFIX,123456.al,直接连接
+  - DOMAIN-SUFFIX,123456.al,MediaYouTube
 
   # 规则匹配
   - DOMAIN-SUFFIX,bing.com,其它流量
