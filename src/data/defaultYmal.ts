@@ -199,6 +199,9 @@ rules:
 
   # EMBY公益服
   - DOMAIN-SUFFIX,123456.al,MediaYouTube
+  - DOMAIN-SUFFIX,cherrytv.one,MediaYouTube
+  - DOMAIN-SUFFIX,daumcdn.net,MediaYouTube
+  
 
   # 规则匹配
   - DOMAIN-SUFFIX,bing.com,其它流量
