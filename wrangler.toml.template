@@ -6,6 +6,7 @@ compatibility_flags = [ "nodejs_compat" ]
 PASSWORD = "123456"
 SALT = "some_random_salt"
 TABLENAME = "dbSUB"
+KEY_VERSION = "1"
 MAGIC = "magic"
 UA = "clash-verge/v1.7.7"
 INSTANT_REFRESH_INTERVAL = "300"

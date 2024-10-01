@@ -27,6 +27,7 @@ type Bindings = {
   PASSWORD: string
   SALT: string
   TABLENAME: string
+  KEY_VERSION: string
   MAGIC: string
   UA: string
   INSTANT_REFRESH_INTERVAL: string
@@ -277,7 +278,7 @@ app.use('/api/*', authMiddleware)
 async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noCache: boolean = false): Promise<FinalObj> {
   console.debug("GetSubYamlWithCache, subType=", subType, "noCache=", noCache)
 
-  const cacheKey = `${env.TABLENAME}:cacheObj:${subType}`
+  const cacheKey = `${env.TABLENAME}:${env.KEY_VERSION}:cacheObj:${subType}`
 
   if (!noCache) {
     // 优先从缓存中获取
@@ -296,28 +297,32 @@ async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noC
         total: 0,
         expire: 9999999999,
     },
-    finalYaml: '',
+    normalYaml: '',
+    stashYaml: '',
   }
 
   // 没有缓存，或者要求不从缓存获取
   const subData = await env.SUB_MERGER_KV.get(env.TABLENAME, "json")
   if (!subData) {
     // 没有配置订阅源
-    finalObj.finalYaml = '# 没有配置订阅源'
+    finalObj.normalYaml = '# 没有配置订阅源'
+    finalObj.stashYaml = '# 没有配置订阅源'
     return finalObj
   }
 
   const allTarget = subData.filter(sub => sub.subType === subType)
   if (allTarget.length === 0) {
     // 没有匹配类型的订阅源
-    finalObj.finalYaml = `# 没有配置该类型的订阅源：${subType}`
+    finalObj.normalYaml = `# 没有配置该类型的订阅源：${subType}`
+    finalObj.stashYaml = `# 没有配置该类型的订阅源：${subType}`
     return finalObj
   }
 
   const [subuserInfo, totalNode] = await getSubscribeYaml(allTarget, env.UA)
-  const proxyCfgYaml = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
+  const {normalYaml, stashYaml} = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
   const defaultYaml = getDefaultYaml()
-  finalObj.finalYaml = `#最后更新时间：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + proxyCfgYaml + defaultYaml
+  finalObj.normalYaml = `#最后更新时间：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + normalYaml + defaultYaml
+  finalObj.stashYaml = `#最后更新时间：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + stashYaml + defaultYaml
   finalObj.subUserInfo = subuserInfo
 
   // 设置缓存
@@ -337,7 +342,7 @@ app.get('/onetime/:magic', async (c) => {
   const subType = SubscriptionType.TrafficPackage
 
   // 获取上次访问接口的时间
-  const accessKey = `${c.env.TABLENAME}:access:${subType}`
+  const accessKey = `${c.env.TABLENAME}:${c.env.KEY_VERSION}:access:${subType}`
   const lastAccessObj = await c.env.SUB_MERGER_KV.get(accessKey, "json")
   const lastAccessTimeStamp = lastAccessObj?.lastAccessTimeStamp || 0
   const diff = currTimeStamp - lastAccessTimeStamp
@@ -349,20 +354,20 @@ app.get('/onetime/:magic', async (c) => {
   // 获取订阅数据
   const finalObj = await GetSubYamlWithCache(subType, c.env, noCache)
 
-  // 检查user-agent是否包含clash-verge
-  const userAgent = c.req.header('user-agent') || '';
-  if (!userAgent.toLowerCase().includes('clash-verge')) {
-    // 如果不包含clash-verge，进行节点过滤
-    console.debug('用户代理不包含clash-verge，进行节点过滤');
-    finalObj.finalYaml = filterProxyForStash(finalObj.finalYaml);
-  }
-
   // 更新访问时间
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
 
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
-  return c.text(finalObj.finalYaml)
+
+  // 检查user-agent是否包含clash-verge
+  const userAgent = c.req.header('user-agent') || '';
+  if (!userAgent.toLowerCase().includes('clash-verge')) {
+    // 如果不包含clash-verge，进行节点过滤
+    return c.text(finalObj.stashYaml)
+  }
+
+  return c.text(finalObj.normalYaml)
 })
 
 app.get('/subscribe/:magic', async (c) => {
@@ -376,7 +381,7 @@ app.get('/subscribe/:magic', async (c) => {
   const subType = SubscriptionType.Monthly
 
   // 获取上次访问接口的时间
-  const accessKey = `${c.env.TABLENAME}:access:${subType}`
+  const accessKey = `${c.env.TABLENAME}:${c.env.KEY_VERSION}:access:${subType}`
   const lastAccessObj = await c.env.SUB_MERGER_KV.get(accessKey, "json")
   const lastAccessTimeStamp = lastAccessObj?.lastAccessTimeStamp || 0
   const diff = currTimeStamp - lastAccessTimeStamp
@@ -388,20 +393,20 @@ app.get('/subscribe/:magic', async (c) => {
   // 获取订阅数据
   const finalObj = await GetSubYamlWithCache(subType, c.env, noCache)
 
-  // 检查user-agent是否包含clash-verge
-  const userAgent = c.req.header('user-agent') || '';
-  if (!userAgent.toLowerCase().includes('clash-verge')) {
-    // 如果不包含clash-verge，进行节点过滤
-    console.debug('用户代理不包含clash-verge，进行节点过滤');
-    finalObj.finalYaml = filterProxyForStash(finalObj.finalYaml);
-  }
-
   // 更新访问时间
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
 
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
-  return c.text(finalObj.finalYaml)
+
+  // 检查user-agent是否包含clash-verge
+  const userAgent = c.req.header('user-agent') || '';
+  if (!userAgent.toLowerCase().includes('clash-verge')) {
+    // 如果不包含clash-verge，进行节点过滤
+    return c.text(finalObj.stashYaml)
+  }
+
+  return c.text(finalObj.normalYaml)
 })
 
 app.get('/', (c) => { 

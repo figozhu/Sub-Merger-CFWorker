@@ -13,7 +13,8 @@ interface SubUserInfo {
 
 interface FinalObj {
     subUserInfo: SubUserInfo;
-    finalYaml: string;
+    normalYaml: string;
+    stashYaml: string;
 }
 
 export {
