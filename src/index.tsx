@@ -19,6 +19,7 @@ import { generatePasswordHash } from './utils/passwordMgr'
 import {getSubscribeYaml, generateSubscriptionUserInfoString} from './utils/getSubscribeYaml'
 import generateProxyConfigYaml from './utils/generateProxyConfigYaml'
 import { getDefaultYaml } from './data/defaultYmal'
+import { filterProxyForStash } from './utils/filterForStash.js'
 
 
 type Bindings = {
@@ -348,6 +349,14 @@ app.get('/onetime/:magic', async (c) => {
   // 获取订阅数据
   const finalObj = await GetSubYamlWithCache(subType, c.env, noCache)
 
+  // 检查user-agent是否包含clash-verge
+  const userAgent = c.req.header('user-agent') || '';
+  if (!userAgent.toLowerCase().includes('clash-verge')) {
+    // 如果不包含clash-verge，进行节点过滤
+    console.debug('用户代理不包含clash-verge，进行节点过滤');
+    finalObj.finalYaml = filterProxyForStash(finalObj.finalYaml);
+  }
+
   // 更新访问时间
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
@@ -378,6 +387,14 @@ app.get('/subscribe/:magic', async (c) => {
 
   // 获取订阅数据
   const finalObj = await GetSubYamlWithCache(subType, c.env, noCache)
+
+  // 检查user-agent是否包含clash-verge
+  const userAgent = c.req.header('user-agent') || '';
+  if (!userAgent.toLowerCase().includes('clash-verge')) {
+    // 如果不包含clash-verge，进行节点过滤
+    console.debug('用户代理不包含clash-verge，进行节点过滤');
+    finalObj.finalYaml = filterProxyForStash(finalObj.finalYaml);
+  }
 
   // 更新访问时间
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
