@@ -3,11 +3,17 @@ import YAML from 'yaml'
 import { filterProxyForStash } from './filterForStash';
 
 function filterNodes(nodes: any[], pattern: string, exclude: boolean = false): any[] {
+  if (pattern === "") {
+    return nodes;
+  }
   const regex = new RegExp(pattern);
   return nodes.filter(node => exclude ? !regex.test(node.name) : regex.test(node.name))
 }
 
 function filterNodesForStash(nodes: any[], pattern: string, exclude: boolean = false): any[] {
+  if (pattern === "") {
+    return nodes;
+  }
   const regex = new RegExp(pattern);
   return nodes.filter(node => exclude ? !regex.test(node.name) : regex.test(node.name)).filter(node => filterProxyForStash(node))
 }
@@ -22,20 +28,32 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   console.debug('envConfig', envConfig)
  
   const allowNodes = filterNodes(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  const otherNodes = filterNodes(allowNodes, envConfig.OTHER_PATTERN || '', false);
-  const youtubeNodes = filterNodes(allowNodes, envConfig.YOUTUBE_PATTERN || '', false);
-  const twitterNodes = filterNodes(allowNodes, envConfig.TWITTER_PATTERN || '', false);
-  const telegramNodes = filterNodes(allowNodes, envConfig.TELEGRAM_PATTERN || '', false);
-  const steamNodes = filterNodes(allowNodes, envConfig.STEAM_PATTERN || '', false);
-  const fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_PATTERN || '', false);
+  let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
+  otherNodes = filterNodes(otherNodes, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
+  let youtubeNodes = filterNodes(allowNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
+  youtubeNodes = filterNodes(youtubeNodes, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
+  let twitterNodes = filterNodes(allowNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
+  twitterNodes = filterNodes(twitterNodes, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
+  let telegramNodes = filterNodes(allowNodes, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
+  telegramNodes = filterNodes(telegramNodes, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
+  let steamNodes = filterNodes(allowNodes, envConfig.STEAM_MATCH_PATTERN || '', false);
+  steamNodes = filterNodes(steamNodes, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
+  let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
+  fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
   const allowNodesForStash = filterNodesForStash(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  const otherNodesForStash = filterNodesForStash(allowNodes, envConfig.OTHER_PATTERN || '', false);
-  const youtubeNodesForStash = filterNodesForStash(allowNodes, envConfig.YOUTUBE_PATTERN || '', false);
-  const twitterNodesForStash = filterNodesForStash(allowNodes, envConfig.TWITTER_PATTERN || '', false);
-  const telegramNodesForStash = filterNodesForStash(allowNodes, envConfig.TELEGRAM_PATTERN || '', false);
-  const steamNodesForStash = filterNodesForStash(allowNodes, envConfig.STEAM_PATTERN || '', false);
-  const fallbackNodesForStash = filterNodesForStash(allowNodes, envConfig.FALLBACK_PATTERN || '', false);
+  let otherNodesForStash = filterNodes(allowNodesForStash, envConfig.OTHER__MATCH_PATTERN || '', false);
+  otherNodesForStash = filterNodes(otherNodesForStash, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
+  let youtubeNodesForStash = filterNodes(allowNodesForStash, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
+  youtubeNodesForStash = filterNodes(youtubeNodesForStash, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
+  let twitterNodesForStash = filterNodes(allowNodesForStash, envConfig.TWITTER_MATCH_PATTERN || '', false);
+  twitterNodesForStash = filterNodes(twitterNodesForStash, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
+  let telegramNodesForStash = filterNodes(allowNodesForStash, envConfig.TELEGRAM__MATCH_PATTERN || '', false);
+  telegramNodesForStash = filterNodes(telegramNodesForStash, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
+  let steamNodesForStash = filterNodes(allowNodesForStash, envConfig.STEAM_MATCH_PATTERN || '', false);
+  steamNodesForStash = filterNodes(steamNodesForStash, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
+  let fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_MATCH_PATTERN || '', false);
+  fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
   // 生成 proxy-groups 配置
   const proxyGroups = [

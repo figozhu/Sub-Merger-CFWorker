@@ -87,11 +87,18 @@ pnpm run deploy
 | MAGIC | 订阅链接中的魔法字符串 |
 | UA | 请求订阅时使用的User-Agent |
 | EXCLUDE_PATTERN | 排除节点的正则表达式 |
-| OTHER_PATTERN | 其他类型节点的正则表达式 |
-| YOUTUBE_PATTERN | YouTube节点的正则表达式 |
-| TWITTER_PATTERN | Twitter节点的正则表达式 |
-| TELEGRAM_PATTERN | Telegram节点的正则表达式 |
-| STEAM_PATTERN | Steam节点的正则表达式 |
+| OTHER_MATCH_PATTERN | 需要的其他类型节点的正则表达式 |
+| FALLBACK_MATCH_PATTERN | 需要的Fallback节点的正则表达式 |
+| YOUTUBE_MATCH_PATTERN | 需要的YouTube节点的正则表达式 |
+| TWITTER_MATCH_PATTERN | 需要的Twitter节点的正则表达式 |
+| TELEGRAM_MATCH_PATTERN | 需要的Telegram节点的正则表达式 |
+| STEAM_MATCH_PATTERN | 需要的Steam节点的正则表达式 |
+| OTHER_EXCLUDE_PATTERN | 排除的其他类型节点的正则表达式 |
+| FALLBACK_EXCLUDE_PATTERN | 排除的Fallback节点的正则表达式 |
+| YOUTUBE_EXCLUDE_PATTERN | 排除的YouTube节点的正则表达式 |
+| TWITTER_EXCLUDE_PATTERN | 排除的Twitter节点的正则表达式 |
+| TELEGRAM_EXCLUDE_PATTERN | 排除的Telegram节点的正则表达式 |
+| STEAM_EXCLUDE_PATTERN | 排除的Steam节点的正则表达式 |
 | INSTANT_REFRESH_INTERVAL | 获取订阅内容不使用缓存的请求间隔（秒） |
 
 
