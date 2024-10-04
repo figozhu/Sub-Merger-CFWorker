@@ -351,6 +351,8 @@ app.get('/onetime/:magic', async (c) => {
     return c.text('magic not match', 403)
   }
 
+  console.debug(`/onetime -> User-Agent=[${c.req.header('user-agent')}]`)
+
   const instantRefreshInterval = c.env.INSTANT_REFRESH_INTERVAL ? parseInt(c.env.INSTANT_REFRESH_INTERVAL) : 300
   const currTimeStamp = dayjs().unix()
   const subType = SubscriptionType.TrafficPackage
@@ -374,10 +376,10 @@ app.get('/onetime/:magic', async (c) => {
 
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
 
-  // 检查user-agent是否包含clash-verge
+  // 检查user-agent是否包含Stash
   const userAgent = c.req.header('user-agent') || '';
-  if (!userAgent.toLowerCase().includes('clash-verge')) {
-    // 如果不包含clash-verge，进行节点过滤
+  if (userAgent.toLowerCase().includes('stash')) {
+    // 如果包含Stash，进行节点过滤
     return c.text(finalObj.stashYaml)
   }
 
@@ -389,6 +391,7 @@ app.get('/subscribe/:magic', async (c) => {
   if (magic !== c.env.MAGIC) {
     return c.text('magic not match', 403)
   }
+  console.debug(`/subscribe -> User-Agent=[${c.req.header('user-agent')}]`)
 
   const instantRefreshInterval = c.env.INSTANT_REFRESH_INTERVAL ? parseInt(c.env.INSTANT_REFRESH_INTERVAL) : 300
   const currTimeStamp = dayjs().unix()
@@ -413,10 +416,10 @@ app.get('/subscribe/:magic', async (c) => {
 
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
 
-  // 检查user-agent是否包含clash-verge
+  // 检查user-agent是否包含Stash
   const userAgent = c.req.header('user-agent') || '';
-  if (!userAgent.toLowerCase().includes('clash-verge')) {
-    // 如果不包含clash-verge，进行节点过滤
+  if (userAgent.toLowerCase().includes('stash')) {
+    // 如果包含Stash，进行节点过滤
     return c.text(finalObj.stashYaml)
   }
 
