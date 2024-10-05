@@ -319,24 +319,24 @@ async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noC
   const subData = await env.SUB_MERGER_KV.get(env.TABLENAME, "json")
   if (!subData) {
     // 没有配置订阅源
-    finalObj.normalYaml = '# 没有配置订阅源'
-    finalObj.stashYaml = '# 没有配置订阅源'
+    finalObj.normalYaml = '# 没有配置订阅源（通用）'
+    finalObj.stashYaml = '# 没有配置订阅源（Stash）'
     return finalObj
   }
 
   const allTarget = subData.filter(sub => sub.subType === subType)
   if (allTarget.length === 0) {
     // 没有匹配类型的订阅源
-    finalObj.normalYaml = `# 没有配置该类型的订阅源：${subType}`
-    finalObj.stashYaml = `# 没有配置该类型的订阅源：${subType}`
+    finalObj.normalYaml = `# 没有配置该类型的订阅源（通用）：${subType}`
+    finalObj.stashYaml = `# 没有配置该类型的订阅源（Stash）：${subType}`
     return finalObj
   }
 
   const [subuserInfo, totalNode] = await getSubscribeYaml(allTarget, env.UA)
   const {normalYaml, stashYaml} = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
   const defaultYaml = getDefaultYaml()
-  finalObj.normalYaml = `#最后更新时间：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + normalYaml + defaultYaml
-  finalObj.stashYaml = `#最后更新时间：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + stashYaml + defaultYaml
+  finalObj.normalYaml = `#最后更新时间（通用）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + normalYaml + defaultYaml
+  finalObj.stashYaml = `#最后更新时间（Stash）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + stashYaml + defaultYaml
   finalObj.subUserInfo = subuserInfo
 
   // 设置缓存
