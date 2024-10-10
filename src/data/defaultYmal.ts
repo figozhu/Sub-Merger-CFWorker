@@ -201,6 +201,7 @@ rules:
   - DOMAIN-SUFFIX,123456.al,MediaYouTube
   - DOMAIN-SUFFIX,cherrytv.one,MediaYouTube
   - DOMAIN-SUFFIX,daumcdn.net,MediaYouTube
+  - DOMAIN-SUFFIX,alphatvapp.top,MediaYouTube
   
 
   # 规则匹配
