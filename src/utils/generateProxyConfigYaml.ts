@@ -33,7 +33,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   let youtubeNodes = filterNodes(allowNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
   youtubeNodes = filterNodes(youtubeNodes, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
   let embyNodes = filterNodes(allowNodes, envConfig.EMBY_MATCH_PATTERN || '', false);
-  embyNodes = filterNodes(youtubeNodes, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
+  embyNodes = filterNodes(embyNodes, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
   let twitterNodes = filterNodes(allowNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
   twitterNodes = filterNodes(twitterNodes, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
   let telegramNodes = filterNodes(allowNodes, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
@@ -49,7 +49,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   let youtubeNodesForStash = filterNodes(allowNodesForStash, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
   youtubeNodesForStash = filterNodes(youtubeNodesForStash, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
   let embyNodesForStash = filterNodes(allowNodesForStash, envConfig.EMBY_MATCH_PATTERN || '', false);
-  embyNodesForStash = filterNodes(youtubeNodesForStash, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
+  embyNodesForStash = filterNodes(embyNodesForStash, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
   let twitterNodesForStash = filterNodes(allowNodesForStash, envConfig.TWITTER_MATCH_PATTERN || '', false);
   twitterNodesForStash = filterNodes(twitterNodesForStash, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
   let telegramNodesForStash = filterNodes(allowNodesForStash, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
