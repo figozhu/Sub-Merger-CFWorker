@@ -198,10 +198,10 @@ rules:
   - DOMAIN-KEYWORD,clubgg,GameSteam
 
   # EMBY公益服
-  - DOMAIN-SUFFIX,123456.al,MediaYouTube
-  - DOMAIN-SUFFIX,cherrytv.one,MediaYouTube
-  - DOMAIN-SUFFIX,daumcdn.net,MediaYouTube
-  - DOMAIN-SUFFIX,alphatvapp.top,MediaYouTube
+  - DOMAIN-SUFFIX,123456.al,EMBY
+  - DOMAIN-SUFFIX,cherrytv.one,EMBY
+  - DOMAIN-SUFFIX,daumcdn.net,EMBY
+  - DOMAIN-SUFFIX,alphatvapp.top,EMBY
   
 
   # 规则匹配
