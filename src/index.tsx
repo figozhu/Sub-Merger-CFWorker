@@ -36,12 +36,14 @@ type Bindings = {
     FALLBACK_MATCH_PATTERN: string
     OTHER_MATCH_PATTERN: string
     YOUTUBE_MATCH_PATTERN: string
+    EMBY_MATCH_PATTERN: string
     TWITTER_MATCH_PATTERN: string
     TELEGRAM_MATCH_PATTERN: string
     STEAM_MATCH_PATTERN: string
     FALLBACK_EXCLUDE_PATTERN: string
     OTHER_EXCLUDE_PATTERN: string
     YOUTUBE_EXCLUDE_PATTERN: string
+    EMBY_EXCLUDE_PATTERN: string
     TWITTER_EXCLUDE_PATTERN: string
     TELEGRAM_EXCLUDE_PATTERN: string
     STEAM_EXCLUDE_PATTERN: string
@@ -335,8 +337,8 @@ async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noC
   const [subuserInfo, totalNode] = await getSubscribeYaml(allTarget, env.UA)
   const {normalYaml, stashYaml} = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
   const defaultYaml = getDefaultYaml()
-  finalObj.normalYaml = `#最后更新时间（通用）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + normalYaml + defaultYaml
-  finalObj.stashYaml = `#最后更新时间（Stash）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + stashYaml + defaultYaml
+  finalObj.normalYaml = `# 最后更新时间（通用）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + normalYaml + defaultYaml
+  finalObj.stashYaml = `# 最后更新时间（Stash）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + stashYaml + defaultYaml
   finalObj.subUserInfo = subuserInfo
 
   // 设置缓存
