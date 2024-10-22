@@ -18,24 +18,19 @@
 
 # 消费降级，性价比机场推荐
 
-原来使用一年100多，200多的机场（每个月才50G流量），现在发现一年12元，13元的机场也挺好用，还有一些稍微贵一些（4块，5块一个月，但大多都有300G、500G的流量）
+原来使用一年200多的机场（每个月才50G流量），现在发现一年12元，13元的机场也挺好用，还有一些稍微贵一些（4块，5块一个月，但大多都有300G、500G的流量）
 
 
-
-下表中，`東京国際空港`是我找到的第一个这么便宜的机场，所以虽然看起来性价比没有后面几个高，但还是保留了。
 
 
 
 | 机场名       | 价格                                                  | 注册网址                    | 特色               |
 | ------------ | ----------------------------------------------------- | --------------------------- | ------------------ |
-| 東京国際空港 | ￥12/年（30G/月）                                     | https://s.wzsd.us.kg/HYJQwH |                    |
 | 十元一年     | ￥9.9/年（100G/月），￥299.99/终身（6折券：LYcPG0Ik） | https://s.wzsd.us.kg/FwmBCw |                    |
 | 804Cloud     | ￥2/100G/月、￥5/300G/月、￥15/无限/月                | https://s.wzsd.us.kg/dhPBJ5 |                    |
 | FashSoks     | ￥3.99/500G/月                                        | https://s.wzsd.us.kg/RHXYXf |                    |
 | 极速机场     | ￥12/年（200G/月）                                    | https://s.wzsd.us.kg/acGmMz |                    |
 | Needay       | ￥13/年（300G/月）                                    | https://s.wzsd.us.kg/2SZsZS |                    |
-| 幻觉机场     | ￥2/100G/月、￥3/500G/月、￥19.9/年（1000G/月）       | https://s.wzsd.us.kg/CpE35n |                    |
-| 优选机场     | $1/1000G/月、￥5/3000G不限时流量包                    | https://s.wzsd.us.kg/hy4Ap5 |                    |
 | 萌物云       | ￥25/500G/月、￥99/500G/季                            | https://s.wzsd.us.kg/fAAA2E | 黄金以上套餐送EMBY |
 | Lantau       | ￥9/50G/月、￥92/年（600G/月）                        | https://s.wzsd.us.kg/S4NieJ | 送EMBY             |
 
@@ -90,6 +85,7 @@ pnpm run deploy
 | TABLENAME | KV存储表名（前缀） |
 | MAGIC | 订阅链接中的魔法字符串 |
 | UA | 请求订阅时使用的User-Agent |
+| BARK_OPENID | Bark 通知的 openid |
 | EXCLUDE_PATTERN | 排除节点的正则表达式 |
 | OTHER_MATCH_PATTERN | 需要的其他类型节点的正则表达式 |
 | FALLBACK_MATCH_PATTERN | 需要的Fallback节点的正则表达式 |

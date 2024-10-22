@@ -1,3 +1,4 @@
+import { sendBarkNotification } from '../notify/bark';
 import { getProxyNodesFromYaml } from './getProxyNodeFromyaml'
 
 function printAllHeaders(response: Response) {
@@ -58,8 +59,10 @@ function updateTotalUserInfo(totalUserInfo: SubUserInfo, newUserInfo: SubUserInf
     totalUserInfo.expire = Math.min(totalUserInfo.expire, newUserInfo.expire)
 }
 
-async function getSubscribeYaml(subArr: any[], userAgent: string): Promise<any[]> {
-    console.debug("getSubscribeYaml", "订阅源数量=", subArr.length, "使用的UA=", userAgent)
+async function getSubscribeYaml(subArr: any[], envConfig: any): Promise<any[]> {
+    const userAgent = envConfig.UA
+    const barkOpenid = envConfig.NOTIFICATION?.BARK_OPENID
+    console.debug("getSubscribeYaml", "订阅源数量=", subArr.length, "使用的UA=", userAgent, "Bark OpenID=", barkOpenid)
     
     const headers = {
         accept: '*/*',
@@ -86,13 +89,16 @@ async function getSubscribeYaml(subArr: any[], userAgent: string): Promise<any[]
                 const tmpSubUserInfo = parseSubscriptionUserInfo(response.headers.get('subscription-userinfo'))
                 updateTotalUserInfo(subUserInfo, tmpSubUserInfo)
                 const yamlContent = await response.text();
+                console.debug(`getSubscribeYaml: 获取订阅源信息成功，订阅源名称：${oneSub.subName}`)
                 return getProxyNodesFromYaml(yamlContent, oneSub.subName);
             } else {
-                console.error(`请求失败,URL: ${oneSub.subUrl}, 状态码: ${response.status}`);
+                console.error(`getSubscribeYaml: 请求失败: Name: ${oneSub.subName}, URL: ${oneSub.subUrl}, 状态码: ${response.status}`);
+                sendBarkNotification(barkOpenid, 'CF-Sub-Merger: 订阅源更新失败', `订阅源名称：${oneSub.subName}，HTTP响应状态码：${response.status}`)
                 return [];
             }
         } catch (error) {
-            console.error(`获取订阅内容时发生异常, URL: ${oneSub.subUrl}`, error);
+            console.error(`getSubscribeYaml: 获取订阅内容时发生异常: Name: ${oneSub.subName}, URL: ${oneSub.subUrl}`, error);
+            sendBarkNotification(barkOpenid, 'CF-Sub-Merger: 订阅源更新失败', `订阅源名称：${oneSub.subName}，错误信息：${error}`)
             return [];
         }
     });

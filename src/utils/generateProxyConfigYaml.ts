@@ -25,7 +25,7 @@ interface IProxyYamlInfo {
 }
 
 function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, string>) : IProxyYamlInfo {
-  console.debug('envConfig', envConfig)
+  // console.debug('generateProxyConfigYaml: envConfig', envConfig)
  
   const allowNodes = filterNodes(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
   let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
