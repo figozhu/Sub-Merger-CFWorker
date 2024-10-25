@@ -197,6 +197,9 @@ rules:
   - PROCESS-NAME,ClubGG,GameSteam
   - DOMAIN-KEYWORD,clubgg,GameSteam
 
+  # GGPoker
+  - PROCESS-NAME,GGnet.exe,GameSteam
+
   # EMBY公益服
   - DOMAIN-SUFFIX,123456.al,EMBY
   - DOMAIN-SUFFIX,cherrytv.one,EMBY
