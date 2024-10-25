@@ -142,6 +142,15 @@ rule-providers:
 rules:
 
   # 进程
+  
+  # ClubGG
+  - PROCESS-NAME,ClubGG.exe,GameSteam
+  - PROCESS-NAME,ClubGG,GameSteam
+  - DOMAIN-KEYWORD,clubgg,GameSteam
+
+  # GGPoker
+  - PROCESS-NAME,GGnet.exe,GameSteam
+
   - PROCESS-NAME,v2ray,DIRECT
   - PROCESS-NAME,xray,DIRECT
   - PROCESS-NAME,naive,DIRECT
@@ -191,14 +200,6 @@ rules:
   - RULE-SET,private,DIRECT
   - RULE-SET,reject,REJECT
   - RULE-SET,direct,DIRECT
-
-  # ClubGG
-  - PROCESS-NAME,ClubGG.exe,GameSteam
-  - PROCESS-NAME,ClubGG,GameSteam
-  - DOMAIN-KEYWORD,clubgg,GameSteam
-
-  # GGPoker
-  - PROCESS-NAME,GGnet.exe,GameSteam
 
   # EMBY公益服
   - DOMAIN-SUFFIX,123456.al,EMBY
