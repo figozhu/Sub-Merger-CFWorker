@@ -30,9 +30,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
   const selfNodes = getSelfNodeData();
  
-  let allowNodes = filterNodes(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  allowNodes = selfNodes.concat(allowNodes);
-
+  const allowNodes = filterNodes(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
   let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodes = filterNodes(otherNodes, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
   let youtubeNodes = filterNodes(allowNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
@@ -48,9 +46,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
-  let allowNodesForStash = filterNodesForStash(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  allowNodesForStash = selfNodes.concat(allowNodesForStash);
-
+  const allowNodesForStash = filterNodesForStash(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
   let otherNodesForStash = filterNodes(allowNodesForStash, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodesForStash = filterNodes(otherNodesForStash, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
   let youtubeNodesForStash = filterNodes(allowNodesForStash, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
@@ -125,7 +121,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: '故障转移',
       type: 'fallback',
-      proxies: fallbackNodes.map((node: any) => node.name),
+      proxies: selfNodes.concat(fallbackNodes).map((node: any) => node.name),
       url: 'http://www.google.com/generate_204',
       interval: 1800,
     },
@@ -182,7 +178,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: '故障转移',
       type: 'fallback',
-      proxies: fallbackNodesForStash.map((node: any) => node.name),
+      proxies: selfNodes.concat(fallbackNodesForStash).map((node: any) => node.name),
       url: 'http://www.google.com/generate_204',
       interval: 1800,
     },
@@ -195,12 +191,12 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
   // 创建完整的配置对象
   const config = {
-    proxies : allowNodes,
+    proxies : selfNodes.concat(allowNodes),
     'proxy-groups': proxyGroups,
   };
 
   const configForStash = {
-    proxies : allowNodesForStash,
+    proxies : selfNodes.concat(allowNodesForStash),
     'proxy-groups': proxyGroupsForStash,
   };
 
