@@ -82,7 +82,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
       proxies: otherNodes.map((node: any) => node.name),
       url: 'http://www.google.com/generate_204',
       interval: 1800,
-  },
+    },
     {
       name: 'GameSteam',
       type: 'select',
@@ -134,11 +134,23 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
   const proxyGroupsForStash = [
     {
-        name: '其它流量',
-        type: 'select',
-        proxies: otherNodesForStash.map((node: any) => node.name),
-        url: 'http://www.google.com/generate_204',
-        interval: 1800,
+      name: '其它流量',
+      type: 'select',
+      proxies: ['自建节点', '机场节点'],
+    },
+    {
+      name: '自建节点',
+      type: 'select',
+      proxies: selfNodes.map((node: any) => node.name),
+      url: 'http://www.google.com/generate_204',
+      interval: 1800,
+    },
+    {
+      name: '机场节点',
+      type: 'select',
+      proxies: otherNodesForStash.map((node: any) => node.name),
+      url: 'http://www.google.com/generate_204',
+      interval: 1800,
     },
     {
       name: 'GameSteam',
