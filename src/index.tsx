@@ -301,10 +301,10 @@ async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noC
 
   if (!noCache) {
     // 优先从缓存中获取
-    console.debug("优先从缓存中获取")
+    console.debug("===== 1. 优先从缓存中获取 ======")
     const subCacheObj = await env.SUB_MERGER_KV.get(cacheKey, "json")
     if (subCacheObj) {
-      console.debug("从缓存中获取成功")
+      console.debug("===== 2. 从缓存中获取成功 ======")
       return subCacheObj
     }
   }

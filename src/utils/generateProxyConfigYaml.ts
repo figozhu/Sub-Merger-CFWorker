@@ -1,6 +1,7 @@
 
 import YAML from 'yaml'
 import { filterProxyForStash } from './filterForStash';
+import { getSelfNodeData } from '../data/selfNodeData';
 
 function filterNodes(nodes: any[], pattern: string, exclude: boolean = false): any[] {
   if (pattern === "") {
@@ -26,8 +27,12 @@ interface IProxyYamlInfo {
 
 function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, string>) : IProxyYamlInfo {
   // console.debug('generateProxyConfigYaml: envConfig', envConfig)
+
+  const selfNodes = getSelfNodeData();
  
-  const allowNodes = filterNodes(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
+  let allowNodes = filterNodes(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
+  allowNodes = selfNodes.concat(allowNodes);
+
   let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodes = filterNodes(otherNodes, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
   let youtubeNodes = filterNodes(allowNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
@@ -43,7 +48,9 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
-  const allowNodesForStash = filterNodesForStash(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
+  let allowNodesForStash = filterNodesForStash(totalNode, envConfig.EXCLUDE_PATTERN || '', true);
+  allowNodesForStash = selfNodes.concat(allowNodesForStash);
+
   let otherNodesForStash = filterNodes(allowNodesForStash, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodesForStash = filterNodes(otherNodesForStash, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
   let youtubeNodesForStash = filterNodes(allowNodesForStash, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
@@ -64,10 +71,22 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
         name: '其它流量',
         type: 'select',
-        proxies: otherNodes.map((node: any) => node.name),
-        url: 'http://www.google.com/generate_204',
-        interval: 1800,
+        proxies: ['自建节点', '机场节点'],
     },
+    {
+      name: '自建节点',
+      type: 'select',
+      proxies: selfNodes.map((node: any) => node.name),
+      url: 'http://www.google.com/generate_204',
+      interval: 1800,
+    },
+    {
+      name: '机场节点',
+      type: 'select',
+      proxies: otherNodes.map((node: any) => node.name),
+      url: 'http://www.google.com/generate_204',
+      interval: 1800,
+  },
     {
       name: 'GameSteam',
       type: 'select',
