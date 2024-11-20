@@ -27,11 +27,10 @@
 | 机场名       | 价格                                                  | 注册网址                    | 特色               |
 | ------------ | ----------------------------------------------------- | --------------------------- | ------------------ |
 | 十元一年     | ￥9.9/年（100G/月），￥299.99/终身（6折券：LYcPG0Ik） | http://s.wzsd.us.kg/MXNmTw |                    |
+| 动力港 | ￥8/100G/月 | https://s.wzsd.us.kg/EaH25c | 速度很快，节点很多（20个HK，15个SG，15个JP，10个US，5个TW，2个UK，1个土耳其、瑞士、荷兰） |
 | 804Cloud     | ￥2/100G/月、￥5/300G/月、￥15/无限/月                | https://s.wzsd.us.kg/dhPBJ5 |                    |
 | FashSoks     | ￥3.99/500G/月                                        | https://s.wzsd.us.kg/RHXYXf |                    |
-| 极速机场     | ￥12/年（200G/月）                                    | https://s.wzsd.us.kg/acGmMz |                    |
-| Needay       | ￥13/年（300G/月）                                    | https://s.wzsd.us.kg/2SZsZS |                    |
-| Lantau       | ￥9/50G/月、￥92/年（600G/月）                        | https://s.wzsd.us.kg/S4NieJ | 送EMBY             |
+| Lantau       | ￥9/50G/月、￥92/年（600G/月）                        | https://s.wzsd.us.kg/S4NieJ |              |
 
 
 
