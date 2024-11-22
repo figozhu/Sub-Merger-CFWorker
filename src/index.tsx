@@ -383,7 +383,7 @@ app.get('/onetime/:magic', async (c) => {
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
 
   // 设置文件名
-  const fileName = encodeURIComponent(`流量包-${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH-mm-ss')}`)
+  const fileName = encodeURIComponent(`流量包（订阅合并）`)
   c.header('Content-Disposition', `attachment; filename*=UTF-8''${fileName}`)
 
   // 检查user-agent是否包含Stash
@@ -428,7 +428,7 @@ app.get('/subscribe/:magic', async (c) => {
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
 
   // 设置文件名
-  const fileName = encodeURIComponent(`包年包月-${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH-mm-ss')}`)
+  const fileName = encodeURIComponent(`包年包月（订阅合并)`)
   c.header('Content-Disposition', `attachment; filename*=UTF-8''${fileName}`)
 
   // 检查user-agent是否包含Stash
