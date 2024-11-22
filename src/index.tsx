@@ -379,7 +379,12 @@ app.get('/onetime/:magic', async (c) => {
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
 
+  // 设置流量和使用时长信息
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
+
+  // 设置文件名
+  const fileName = encodeURIComponent(`流量包-${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH-mm-ss')}`)
+  c.header('Content-Disposition', `attachment; filename*=UTF-8''${fileName}`)
 
   // 检查user-agent是否包含Stash
   const userAgent = c.req.header('user-agent') || '';
@@ -419,7 +424,12 @@ app.get('/subscribe/:magic', async (c) => {
   const lastAccessStr = JSON.stringify({lastAccessTimeStamp: currTimeStamp})
   await c.env.SUB_MERGER_KV.put(accessKey, lastAccessStr)
 
+  // 设置流量和使用时长信息
   c.header('subscription-userinfo', generateSubscriptionUserInfoString(finalObj.subUserInfo))
+
+  // 设置文件名
+  const fileName = encodeURIComponent(`包年包月-${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH-mm-ss')}`)
+  c.header('Content-Disposition', `attachment; filename*=UTF-8''${fileName}`)
 
   // 检查user-agent是否包含Stash
   const userAgent = c.req.header('user-agent') || '';
