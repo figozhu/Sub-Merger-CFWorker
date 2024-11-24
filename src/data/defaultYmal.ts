@@ -206,6 +206,7 @@ rules:
   - DOMAIN-SUFFIX,cherrytv.one,EMBY
   - DOMAIN-SUFFIX,daumcdn.net,EMBY
   - DOMAIN-SUFFIX,alphatvapp.top,EMBY
+  - DOMAIN-SUFFIX,misty.cx,EMBY
   
 
   # 规则匹配
