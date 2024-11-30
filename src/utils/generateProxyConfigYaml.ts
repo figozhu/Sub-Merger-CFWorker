@@ -67,17 +67,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
         name: '其它流量',
         type: 'select',
-        proxies: ['自建节点', '机场节点'],
-    },
-    {
-      name: '自建节点',
-      type: 'select',
-      proxies: selfNodes.map((node: any) => node.name),
-    },
-    {
-      name: '机场节点',
-      type: 'select',
-      proxies: otherNodes.map((node: any) => node.name),
+        proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : otherNodes.map((node: any) => node.name),
     },
     {
       name: 'GameSteam',
@@ -118,13 +108,8 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     },
   ];
 
-  const proxyGroupsForStash = [
-    {
-      name: '其它流量',
-      type: 'select',
-      proxies: ['自建节点', '机场节点'],
-    },
-    {
+  if (selfNodes.length > 0) {
+    proxyGroups.splice(1, 0, {
       name: '自建节点',
       type: 'select',
       proxies: selfNodes.map((node: any) => node.name),
@@ -132,7 +117,15 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: '机场节点',
       type: 'select',
-      proxies: otherNodesForStash.map((node: any) => node.name),
+      proxies: otherNodes.map((node: any) => node.name),
+    })
+  }
+
+  const proxyGroupsForStash = [
+    {
+      name: '其它流量',
+      type: 'select',
+      proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : otherNodesForStash.map((node: any) => node.name),
     },
     {
       name: 'GameSteam',
@@ -172,6 +165,19 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
         proxies: ['DIRECT'],
     },
   ];
+
+  if (selfNodes.length > 0) {
+    proxyGroupsForStash.splice(1, 0,     {
+      name: '自建节点',
+      type: 'select',
+      proxies: selfNodes.map((node: any) => node.name),
+    },
+    {
+      name: '机场节点',
+      type: 'select',
+      proxies: otherNodesForStash.map((node: any) => node.name),
+    })
+  }
 
   // 创建完整的配置对象
   const config = {
