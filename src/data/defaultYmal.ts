@@ -174,8 +174,11 @@ rules:
   - PROCESS-NAME,Surge%202,DIRECT
   - PROCESS-NAME,Surge%203,DIRECT
   - PROCESS-NAME,Surge%204,DIRECT
+  - PROCESS-NAME,xllite,DIRECT
   - PROCESS-NAME,Thunder,DIRECT
+  - PROCESS-NAME,ThunderVIP,DIRECT
   - PROCESS-NAME,DownloadService,DIRECT
+  - PROCESS-NAME,DownloadSDKServer,DIRECT
   - PROCESS-NAME,qBittorrent,DIRECT
   - PROCESS-NAME,Transmission,DIRECT
   - PROCESS-NAME,fdm,DIRECT
@@ -189,8 +192,11 @@ rules:
   - PROCESS-NAME,fdm.exe,DIRECT
   - PROCESS-NAME,NetTransport.exe,DIRECT
   - PROCESS-NAME,qbittorrent.exe,DIRECT
+  - PROCESS-NAME,xllite.exe,DIRECT
   - PROCESS-NAME,Thunder.exe,DIRECT
   - PROCESS-NAME,ThunderVIP.exe,DIRECT
+  - PROCESS-NAME,DownloadService.exe,DIRECT
+  - PROCESS-NAME,DownloadSDKServer.exe,DIRECT
   - PROCESS-NAME,transmission-daemon.exe,DIRECT
   - PROCESS-NAME,transmission-qt.exe,DIRECT
   - PROCESS-NAME,uTorrent.exe,DIRECT
