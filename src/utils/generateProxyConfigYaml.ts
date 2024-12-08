@@ -30,9 +30,13 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
   const selfNodes = getSelfNodeData();
   const mergeNodes = selfNodes.concat(totalNode);
+  // console.debug('generateProxyConfigYaml: selfNodes', selfNodes);
+  // console.debug('generateProxyConfigYaml: mergeNodes', mergeNodes);
 
   const bMergeFlag = true;  // proxy-groups 中是否合并自建节点
   const realTotalNode = bMergeFlag ? mergeNodes : totalNode;
+  // console.debug('generateProxyConfigYaml: realTotalNode', realTotalNode);
+
  
   const allowNodes = filterNodes(realTotalNode, envConfig.EXCLUDE_PATTERN || '', true);
   let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
@@ -185,12 +189,12 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
   // 创建完整的配置对象
   const config = {
-    proxies : selfNodes.concat(allowNodes),
+    proxies : bMergeFlag ? allowNodes : selfNodes.concat(allowNodes),
     'proxy-groups': proxyGroups,
   };
 
   const configForStash = {
-    proxies : selfNodes.concat(allowNodesForStash),
+    proxies : bMergeFlag ? allowNodesForStash : selfNodes.concat(allowNodesForStash),
     'proxy-groups': proxyGroupsForStash,
   };
 
