@@ -213,6 +213,8 @@ rules:
   - DOMAIN-SUFFIX,daumcdn.net,EMBY
   - DOMAIN-SUFFIX,alphatvapp.top,EMBY
   - DOMAIN-SUFFIX,misty.cx,EMBY
+  - DOMAIN-SUFFIX,emby.wtf,EMBY
+  - DOMAIN-SUFFIX,term.wtf,EMBY
   
 
   # 规则匹配

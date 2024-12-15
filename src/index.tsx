@@ -1,9 +1,7 @@
 import { Hono } from 'hono'
 import {
   getCookie,
-  getSignedCookie,
   setCookie,
-  setSignedCookie,
   deleteCookie,
 } from 'hono/cookie'
 
