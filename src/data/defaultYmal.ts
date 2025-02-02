@@ -215,6 +215,7 @@ rules:
   - DOMAIN-SUFFIX,misty.cx,EMBY
   - DOMAIN-SUFFIX,emby.wtf,EMBY
   - DOMAIN-SUFFIX,term.wtf,EMBY
+  - DOMAIN-SUFFIX,emby.69yun69.com,EMBY
   
 
   # 规则匹配
