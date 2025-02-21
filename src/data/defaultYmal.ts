@@ -144,12 +144,12 @@ rules:
   # 进程
   
   # ClubGG
-  - PROCESS-NAME,ClubGG.exe,GameSteam
-  - PROCESS-NAME,ClubGG,GameSteam
-  - DOMAIN-KEYWORD,clubgg,GameSteam
+  - PROCESS-NAME,ClubGG.exe,DIRECT
+  - PROCESS-NAME,ClubGG,DIRECT
+  - DOMAIN-KEYWORD,clubgg,DIRECT
 
   # GGPoker
-  - PROCESS-NAME,GGnet.exe,GameSteam
+  - PROCESS-NAME,GGnet.exe,PokerClient
 
   - PROCESS-NAME,v2ray,DIRECT
   - PROCESS-NAME,xray,DIRECT
@@ -215,7 +215,7 @@ rules:
   - DOMAIN-SUFFIX,misty.cx,EMBY
   - DOMAIN-SUFFIX,emby.wtf,EMBY
   - DOMAIN-SUFFIX,term.wtf,EMBY
-  - DOMAIN-SUFFIX,emby.69yun69.com,EMBY
+  - DOMAIN-SUFFIX,emby.69yun69.com,DIRECT
   
 
   # 规则匹配

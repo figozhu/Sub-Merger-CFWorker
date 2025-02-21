@@ -51,6 +51,8 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   telegramNodes = filterNodes(telegramNodes, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
   let steamNodes = filterNodes(allowNodes, envConfig.STEAM_MATCH_PATTERN || '', false);
   steamNodes = filterNodes(steamNodes, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
+  let pokerNodes = filterNodes(allowNodes, envConfig.POKER_MATCH_PATTERN || '', false);
+  pokerNodes = filterNodes(pokerNodes, envConfig.POKER_EXCLUDE_PATTERN || '', true);
   let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
@@ -67,6 +69,8 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   telegramNodesForStash = filterNodes(telegramNodesForStash, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
   let steamNodesForStash = filterNodes(allowNodesForStash, envConfig.STEAM_MATCH_PATTERN || '', false);
   steamNodesForStash = filterNodes(steamNodesForStash, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
+  let pokerNodesForStash = filterNodes(allowNodesForStash, envConfig.POKER_MATCH_PATTERN || '', false);
+  pokerNodesForStash = filterNodes(pokerNodesForStash, envConfig.POKER_EXCLUDE_PATTERN || '', true);
   let fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
@@ -78,14 +82,19 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
         proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : otherNodes.map((node: any) => node.name),
     },
     {
-      name: 'GameSteam',
-      type: 'select',
-      proxies: steamNodes.map((node: any) => node.name),
-    },
-    {
       name: 'MediaTelegram',
       type: 'select',
       proxies: telegramNodes.map((node: any) => node.name),
+    },
+    {
+      name: 'PokerClient',
+      type: 'select',
+      proxies: pokerNodes.map((node: any) => node.name),
+    },
+    {
+      name: 'GameSteam',
+      type: 'select',
+      proxies: steamNodes.map((node: any) => node.name),
     },
     {
         name: 'MediaYouTube',
@@ -136,14 +145,19 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
       proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : otherNodesForStash.map((node: any) => node.name),
     },
     {
-      name: 'GameSteam',
-      type: 'select',
-      proxies: steamNodesForStash.map((node: any) => node.name),
-    },
-    {
       name: 'MediaTelegram',
       type: 'select',
       proxies: telegramNodesForStash.map((node: any) => node.name),
+    },
+    {
+      name: 'PokerClient',
+      type: 'select',
+      proxies: pokerNodesForStash.map((node: any) => node.name),
+    },
+    {
+      name: 'GameSteam',
+      type: 'select',
+      proxies: steamNodesForStash.map((node: any) => node.name),
     },
     {
         name: 'MediaYouTube',
