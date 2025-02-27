@@ -10,7 +10,7 @@ export function filterProxyForStash(proxy: any) : boolean {
     return false
   }
 
-  if (proxy.cipher && proxy.cipher === '2022-blake3-aes-256-gcm') {
+  if (proxy.cipher && (proxy.cipher === '2022-blake3-aes-256-gcm' || proxy.cipher === '2022-blake3-aes-128-gcm')) {
     return false
   }
 
