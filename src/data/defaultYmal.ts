@@ -35,36 +35,6 @@ rule-providers:
     url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/YouTube/YouTube.yaml"
     path: ./RuleSet/Youtube.yaml
     interval: 86400
-  Google:
-    type: http
-    behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Google/Google.yaml"
-    path: ./RuleSet/Google.yaml
-    interval: 86400
-  GitHub:
-    type: http
-    behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/GitHub/GitHub.yaml"
-    path: ./RuleSet/GitHub.yaml
-    interval: 86400
-  OpenAI:
-    type: http
-    behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/OpenAI/OpenAI.yaml"
-    path: ./RuleSet/OpenAI.yaml
-    interval: 86400
-  Claude:
-    type: http
-    behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Claude/Claude.yaml"
-    path: ./RuleSet/Claude.yaml
-    interval: 86400
-  Apple:
-    type: http
-    behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Apple/Apple.yaml"
-    path: ./RuleSet/Apple.yaml
-    interval: 86400
   Twitter:
     type: http
     behavior: classical
@@ -225,11 +195,6 @@ rules:
   - DOMAIN-SUFFIX,api2d.net,直接连接
   - DOMAIN-SUFFIX,appstorrent.ru,其它流量
 
-  - RULE-SET,OpenAI,其它流量
-  - RULE-SET,Claude,其它流量
-  - RULE-SET,Google,其它流量
-  - RULE-SET,GitHub,其它流量
-  - RULE-SET,Apple,直接连接
   - RULE-SET,Youtube,MediaYouTube
   - RULE-SET,Twitter,MediaTwitter
   - RULE-SET,Telegram,MediaTelegram
