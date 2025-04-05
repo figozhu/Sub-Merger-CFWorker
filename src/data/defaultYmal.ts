@@ -181,7 +181,8 @@ rules:
   - DOMAIN-SUFFIX,123456.al,EMBY
   - DOMAIN-SUFFIX,cherrytv.one,EMBY
   - DOMAIN-SUFFIX,daumcdn.net,EMBY
-  - DOMAIN-SUFFIX,overseaplus.alphatvapp.top,EMBY
+  - DOMAIN-SUFFIX,aop4.alphatvapp.top,直接连接
+  - DOMAIN-SUFFIX,alphatvop.alphatvapp.top,EMBY
   - DOMAIN-SUFFIX,misty.cx,EMBY
   - DOMAIN-SUFFIX,emby.wtf,EMBY
   - DOMAIN-SUFFIX,term.wtf,EMBY
