@@ -191,6 +191,7 @@ rules:
 
   # 规则匹配
   - DOMAIN-SUFFIX,figozhu.xyz,直接连接
+  - DOMAIN-SUFFIX,tu-zi.com,直接连接
   - DOMAIN-SUFFIX,bing.com,其它流量
   - DOMAIN-SUFFIX,a-nomad.com,直接连接
   - DOMAIN-SUFFIX,api2d.net,直接连接
