@@ -181,7 +181,7 @@ rules:
   - DOMAIN-SUFFIX,123456.al,EMBY
   - DOMAIN-SUFFIX,cherrytv.one,EMBY
   - DOMAIN-SUFFIX,daumcdn.net,EMBY
-  - DOMAIN-SUFFIX,aop4.alphatvapp.top,直接连接
+  - DOMAIN-SUFFIX,aop4.204cloud.com,直接连接
   - DOMAIN-SUFFIX,alphatvop.alphatvapp.top,EMBY
   - DOMAIN-SUFFIX,misty.cx,EMBY
   - DOMAIN-SUFFIX,emby.wtf,EMBY
@@ -190,6 +190,7 @@ rules:
   
 
   # 规则匹配
+  - DOMAIN-SUFFIX,chzhshch.org,直接连接
   - DOMAIN-SUFFIX,figozhu.xyz,直接连接
   - DOMAIN-SUFFIX,tu-zi.com,直接连接
   - DOMAIN-SUFFIX,bing.com,其它流量
