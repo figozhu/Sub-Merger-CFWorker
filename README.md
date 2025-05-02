@@ -32,7 +32,6 @@
 | UNDERWATER | 按用量计费：￥0.12/1G | https://wzsd.figozhu.xyz/wFWR6Y | IP比较纯净，速度较快 |
 | 动力港 | ￥8/100G/月 | https://wzsd.figozhu.xyz/EaH25c | 速度很快，节点很多（20个HK，15个SG，15个JP，10个US，5个TW，2个UK，1个土耳其、瑞士、荷兰） |
 | 804Cloud     | ￥2/100G/月、￥5/300G/月、￥15/无限/月                | https://wzsd.figozhu.xyz/tdajGa |                    |
-| FashSoks     | ￥3.99/500G/月                                        | https://wzsd.figozhu.xyz/RHXYXf |                    |
 
 
 
