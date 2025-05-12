@@ -89,7 +89,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: 'PokerClient',
       type: 'select',
-      proxies: pokerNodes.map((node: any) => node.name),
+      proxies: ['直接连接', ...pokerNodes.map((node: any) => node.name)],
     },
     {
       name: 'GameSteam',
@@ -152,7 +152,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: 'PokerClient',
       type: 'select',
-      proxies: pokerNodesForStash.map((node: any) => node.name),
+      proxies: ['直接连接', ...pokerNodesForStash.map((node: any) => node.name)],
     },
     {
       name: 'GameSteam',
