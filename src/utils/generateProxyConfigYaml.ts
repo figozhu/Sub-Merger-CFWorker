@@ -19,6 +19,9 @@ function filterNodesForStash(nodes: any[], pattern: string, exclude: boolean = f
   return nodes.filter(node => exclude ? !regex.test(node.name) : regex.test(node.name)).filter(node => filterProxyForStash(node))
 }
 
+function uniqueNodesArr(nodeNameArr: string[]) {
+  return Array.from(new Set(nodeNameArr))
+}
 
 interface IProxyYamlInfo {
   normalYaml: string;
@@ -30,6 +33,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
   const selfNodes = getSelfNodeData();
   const mergeNodes = selfNodes.concat(totalNode);
+  const totalAndSelfNodes = selfNodes.length > 0 ? [{name: '自建节点'}, ...totalNode] : totalNode;
   // console.debug('generateProxyConfigYaml: selfNodes', selfNodes);
   // console.debug('generateProxyConfigYaml: mergeNodes', mergeNodes);
 
@@ -39,13 +43,13 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
 
  
   const allowNodes = filterNodes(realTotalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
+  let otherNodes = filterNodes(totalNode, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodes = filterNodes(otherNodes, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
-  let youtubeNodes = filterNodes(allowNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
+  let youtubeNodes = filterNodes(totalAndSelfNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
   youtubeNodes = filterNodes(youtubeNodes, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
-  let embyNodes = filterNodes(allowNodes, envConfig.EMBY_MATCH_PATTERN || '', false);
+  let embyNodes = filterNodes(totalAndSelfNodes, envConfig.EMBY_MATCH_PATTERN || '', false);
   embyNodes = filterNodes(embyNodes, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
-  let twitterNodes = filterNodes(allowNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
+  let twitterNodes = filterNodes(totalAndSelfNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
   twitterNodes = filterNodes(twitterNodes, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
   let telegramNodes = filterNodes(allowNodes, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
   telegramNodes = filterNodes(telegramNodes, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
@@ -57,13 +61,13 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
   const allowNodesForStash = filterNodesForStash(realTotalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  let otherNodesForStash = filterNodes(allowNodesForStash, envConfig.OTHER_MATCH_PATTERN || '', false);
+  let otherNodesForStash = filterNodes(totalNode, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodesForStash = filterNodes(otherNodesForStash, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
-  let youtubeNodesForStash = filterNodes(allowNodesForStash, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
+  let youtubeNodesForStash = filterNodes(totalAndSelfNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
   youtubeNodesForStash = filterNodes(youtubeNodesForStash, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
-  let embyNodesForStash = filterNodes(allowNodesForStash, envConfig.EMBY_MATCH_PATTERN || '', false);
+  let embyNodesForStash = filterNodes(totalAndSelfNodes, envConfig.EMBY_MATCH_PATTERN || '', false);
   embyNodesForStash = filterNodes(embyNodesForStash, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
-  let twitterNodesForStash = filterNodes(allowNodesForStash, envConfig.TWITTER_MATCH_PATTERN || '', false);
+  let twitterNodesForStash = filterNodes(totalAndSelfNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
   twitterNodesForStash = filterNodes(twitterNodesForStash, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
   let telegramNodesForStash = filterNodes(allowNodesForStash, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
   telegramNodesForStash = filterNodes(telegramNodesForStash, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
@@ -79,42 +83,42 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
         name: '其它流量',
         type: 'select',
-        proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : otherNodes.map((node: any) => node.name),
+        proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : uniqueNodesArr(otherNodes.map((node: any) => node.name)),
     },
     {
       name: 'MediaTelegram',
       type: 'select',
-      proxies: telegramNodes.map((node: any) => node.name),
+      proxies: uniqueNodesArr(telegramNodes.map((node: any) => node.name)),
     },
     {
       name: 'PokerClient',
       type: 'select',
-      proxies: ['直接连接', ...pokerNodes.map((node: any) => node.name)],
+      proxies: uniqueNodesArr(['直接连接', ...pokerNodes.map((node: any) => node.name)]),
     },
     {
       name: 'GameSteam',
       type: 'select',
-      proxies: steamNodes.map((node: any) => node.name),
+      proxies: uniqueNodesArr(steamNodes.map((node: any) => node.name)),
     },
     {
         name: 'MediaYouTube',
         type: 'select',
-        proxies: youtubeNodes.map((node: any) => node.name),
+        proxies: uniqueNodesArr(youtubeNodes.map((node: any) => node.name)),
     },
     {
         name: 'MediaTwitter',
         type: 'select',
-        proxies: twitterNodes.map((node: any) => node.name),
+        proxies: uniqueNodesArr(twitterNodes.map((node: any) => node.name)),
     },
     {
       name: 'EMBY',
       type: 'select',
-      proxies: embyNodes.map((node: any) => node.name),
+      proxies: uniqueNodesArr(embyNodes.map((node: any) => node.name)),
     },
     {
       name: '故障转移',
       type: 'fallback',
-      proxies: selfNodes.concat(fallbackNodes).map((node: any) => node.name),
+      proxies: uniqueNodesArr(fallbackNodes.map((node: any) => node.name)),
       url: 'http://www.google.com/generate_204',
       interval: 1800,
     },
@@ -134,7 +138,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: '机场节点',
       type: 'select',
-      proxies: otherNodes.map((node: any) => node.name),
+      proxies: uniqueNodesArr(otherNodes.map((node: any) => node.name)),
     })
   }
 
@@ -142,42 +146,42 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: '其它流量',
       type: 'select',
-      proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : otherNodesForStash.map((node: any) => node.name),
+      proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : uniqueNodesArr(otherNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'MediaTelegram',
       type: 'select',
-      proxies: telegramNodesForStash.map((node: any) => node.name),
+      proxies: uniqueNodesArr(telegramNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'PokerClient',
       type: 'select',
-      proxies: ['直接连接', ...pokerNodesForStash.map((node: any) => node.name)],
+      proxies: uniqueNodesArr(['直接连接', ...pokerNodesForStash.map((node: any) => node.name)]),
     },
     {
       name: 'GameSteam',
       type: 'select',
-      proxies: steamNodesForStash.map((node: any) => node.name),
+      proxies: uniqueNodesArr(steamNodesForStash.map((node: any) => node.name)),
     },
     {
         name: 'MediaYouTube',
         type: 'select',
-        proxies: youtubeNodesForStash.map((node: any) => node.name),
+        proxies: uniqueNodesArr(youtubeNodesForStash.map((node: any) => node.name)),
     },
     {
         name: 'MediaTwitter',
         type: 'select',
-        proxies: twitterNodesForStash.map((node: any) => node.name),
+        proxies: uniqueNodesArr(twitterNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'EMBY',
       type: 'select',
-      proxies: embyNodesForStash.map((node: any) => node.name),
+      proxies: uniqueNodesArr(embyNodesForStash.map((node: any) => node.name)),
     },
     {
       name: '故障转移',
       type: 'fallback',
-      proxies: selfNodes.concat(fallbackNodesForStash).map((node: any) => node.name),
+      proxies: uniqueNodesArr(fallbackNodesForStash.map((node: any) => node.name)),
       url: 'http://www.google.com/generate_204',
       interval: 1800,
     },
@@ -197,7 +201,7 @@ function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, str
     {
       name: '机场节点',
       type: 'select',
-      proxies: otherNodesForStash.map((node: any) => node.name),
+      proxies: uniqueNodesArr(otherNodesForStash.map((node: any) => node.name)),
     })
   }
 
