@@ -116,7 +116,11 @@ rules:
   # ClubGG
   - PROCESS-NAME,ClubGG.exe,DIRECT
   - PROCESS-NAME,ClubGG,DIRECT
-  - DOMAIN-KEYWORD,clubgg,DIRECT
+  - DOMAIN-SUFFIX,api.clubgg.com,DIRECT
+  - DOMAIN-SUFFIX,api2.clubgg.com,DIRECT
+  - DOMAIN-SUFFIX,games.clubgg.com,DIRECT
+  - DOMAIN-SUFFIX,rum-api.clubgg.com,DIRECT
+  - DOMAIN-SUFFIX,apigw-client.good-game-service.com,DIRECT
 
   # GGPoker
   - PROCESS-NAME,GGnet.exe,PokerClient
