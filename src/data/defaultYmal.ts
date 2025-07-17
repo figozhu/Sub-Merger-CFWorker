@@ -198,6 +198,8 @@ rules:
   - DOMAIN-SUFFIX,figozhu.xyz,直接连接
   - DOMAIN-SUFFIX,tu-zi.com,直接连接
   - DOMAIN-SUFFIX,one.api4gpt.com,直接连接
+  - DOMAIN-SUFFIX,anyrouter.top,直接连接
+  - DOMAIN-SUFFIX,immersivetranslate.com,直接连接
   - DOMAIN-SUFFIX,filesystem.site,直接连接
   - DOMAIN-SUFFIX,bing.com,其它流量
   - DOMAIN-SUFFIX,a-nomad.com,直接连接
