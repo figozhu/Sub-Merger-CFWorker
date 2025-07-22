@@ -306,9 +306,9 @@ rules:
   - RULE-SET,Steam,GameSteam,no-resolve
 
   
-  - RULE-SET,proxy,其它流量,no-resolve
   - GEOIP,LAN,DIRECT,no-resolve
   - GEOIP,CN,DIRECT,no-resolve
+  - RULE-SET,proxy,其它流量,no-resolve
   - MATCH,其它流量
 
 `;
