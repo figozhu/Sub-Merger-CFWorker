@@ -232,6 +232,33 @@ const globalStyles = `
     box-sizing: border-box;
     padding: 5px;
   }
+
+  .config-section {
+    margin-top: 2rem;
+  }
+
+  .config-textarea {
+    width: 100%;
+    min-height: 200px;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .config-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #333;
+  }
+
+  .config-item {
+    margin-bottom: 1.5rem;
+  }
 `;
 
 app.post('/login', async(c) => {
@@ -340,8 +367,8 @@ async function GetSubYamlWithCache(subType: SubscriptionType, env: Bindings, noC
   }
 
   const [subuserInfo, totalNode] = await getSubscribeYaml(allTarget, env)
-  const {normalYaml, stashYaml} = generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN)
-  const defaultYaml = getDefaultYaml()
+  const {normalYaml, stashYaml} = await generateProxyConfigYaml(totalNode, subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN, env)
+  const defaultYaml = await getDefaultYaml(env)
   finalObj.normalYaml = `# 最后更新时间（通用）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + normalYaml + defaultYaml
   finalObj.stashYaml = `# 最后更新时间（Stash）：${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}\n\n` + stashYaml + defaultYaml
   finalObj.subUserInfo = subuserInfo
@@ -558,6 +585,21 @@ app.get('/dashboard', async (c) => {
       
       <hr class="section-divider">
       
+      <h2>配置管理</h2>
+      <div class="config-section">
+        <div class="config-item">
+          <label class="config-label" for="selfNodeConfig">自建节点配置 (JSON格式)</label>
+          <textarea id="selfNodeConfig" class="config-textarea" placeholder="请输入自建节点的JSON配置..."></textarea>
+        </div>
+        <div class="config-item">
+          <label class="config-label" for="defaultYamlConfig">默认YAML规则配置</label>
+          <textarea id="defaultYamlConfig" class="config-textarea" placeholder="请输入默认的YAML规则配置..."></textarea>
+        </div>
+        <button class="btn btn-save" onclick="saveConfig()">保存配置</button>
+      </div>
+      
+      <hr class="section-divider">
+      
       <h2>合并后的订阅链接</h2>
       <table id="mergedSubscriptionsTable">
         <thead>
@@ -740,8 +782,64 @@ app.get('/dashboard', async (c) => {
         });
       }
 
+      function loadConfig() {
+        fetch('/api/config')
+          .then(response => response.json())
+          .then(data => {
+            if (data.code === 0) {
+              document.getElementById('selfNodeConfig').value = data.data.selfNodeData || '';
+              document.getElementById('defaultYamlConfig').value = data.data.defaultYaml || '';
+            } else {
+              console.error('加载配置失败:', data.msg);
+            }
+          })
+          .catch(error => {
+            console.error('加载配置出错:', error);
+          });
+      }
+
+      function saveConfig() {
+        const selfNodeData = document.getElementById('selfNodeConfig').value.trim();
+        const defaultYaml = document.getElementById('defaultYamlConfig').value.trim();
+
+        // 验证自建节点配置是否为有效JSON（如果不为空）
+        if (selfNodeData) {
+          try {
+            const parsed = JSON.parse(selfNodeData);
+            if (!Array.isArray(parsed)) {
+              alert('自建节点配置必须是一个JSON数组');
+              return;
+            }
+          } catch (error) {
+            alert('自建节点配置不是有效的JSON格式: ' + error.message);
+            return;
+          }
+        }
+
+        fetch('/api/config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ selfNodeData, defaultYaml }),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.code === 0) {
+            alert('配置保存成功');
+          } else {
+            alert('配置保存失败: ' + (data.msg || '未知错误'));
+          }
+        })
+        .catch(error => {
+          console.error('保存配置出错:', error);
+          alert('保存配置过程中出现错误');
+        });
+      }
+
       renderTable();
       updateMergedLinks();
+      loadConfig();
     </script>
   </body>
   </html>
@@ -777,6 +875,62 @@ app.post('/api/save', async (c) => {
   })
 
   await c.env.SUB_MERGER_KV.put(c.env.TABLENAME, JSON.stringify(realSubscriptions));
+
+  return c.json(resultObj, 200);
+});
+
+app.get('/api/config', async (c) => {
+  const configKey = `${c.env.TABLENAME}:config`
+  const config = await c.env.SUB_MERGER_KV.get(configKey, "json")
+  
+  // 获取默认值作为备用
+  const { getDefaultSelfNodeData } = await import('./data/selfNodeData')
+  const { getDefaultYamlString } = await import('./data/defaultYmal')
+  
+  return c.json({
+    code: 0,
+    data: config || {
+      selfNodeData: getDefaultSelfNodeData(),
+      defaultYaml: getDefaultYamlString()
+    }
+  })
+});
+
+app.post('/api/config', async (c) => {
+  const param = await c.req.json();
+  console.debug("/api/config -> req:", param)
+
+  const resultObj = {
+    code: 0,
+    msg: "success",
+  }
+
+  const { selfNodeData, defaultYaml } = param;
+  
+  if (selfNodeData === undefined || defaultYaml === undefined) {
+    resultObj.code = 1
+    resultObj.msg = "selfNodeData and defaultYaml are required"
+    return c.json(resultObj, 400)
+  }
+
+  const config = {
+    selfNodeData: selfNodeData.trim(),
+    defaultYaml: defaultYaml.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const configKey = `${c.env.TABLENAME}:config`
+  await c.env.SUB_MERGER_KV.put(configKey, JSON.stringify(config));
+
+  // 清理缓存，强制重新生成配置
+  const cacheKeys = [
+    `${c.env.TABLENAME}:${c.env.KEY_VERSION}:cacheObj:${SubscriptionType.Monthly}`,
+    `${c.env.TABLENAME}:${c.env.KEY_VERSION}:cacheObj:${SubscriptionType.TrafficPackage}`
+  ];
+  
+  for (const key of cacheKeys) {
+    await c.env.SUB_MERGER_KV.delete(key);
+  }
 
   return c.json(resultObj, 200);
 });

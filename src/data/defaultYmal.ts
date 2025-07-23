@@ -1,5 +1,4 @@
-export function getDefaultYaml(): string {
-  return `
+const defaultYamlString = `
 #---------------------------------------------------#
 ## 自定义Clash配置 
 #---------------------------------------------------#
@@ -259,4 +258,30 @@ rules:
   - MATCH,其它流量
 
 `;
+
+// 默认的YAML配置，作为备用
+export function getDefaultYamlString(): string {
+  return defaultYamlString;
+}
+
+export async function getDefaultYaml(env?: any): Promise<string> {
+    if (!env) {
+        // 如果没有环境变量，使用默认数据
+        return defaultYamlString;
+    }
+
+    try {
+        // 尝试从KV存储获取动态配置
+        const configKey = `${env.TABLENAME}:config`
+        const config = await env.SUB_MERGER_KV.get(configKey, "json")
+        
+        if (config && config.defaultYaml && config.defaultYaml.trim()) {
+            return config.defaultYaml;
+        }
+    } catch (error) {
+        console.error('获取默认YAML配置失败，使用默认配置:', error);
+    }
+
+    // 回退到默认配置
+    return defaultYamlString;
 }

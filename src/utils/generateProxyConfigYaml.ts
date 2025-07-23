@@ -28,10 +28,10 @@ interface IProxyYamlInfo {
   stashYaml: string;
 }
 
-function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, string>) : IProxyYamlInfo {
+async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, string>, env?: any) : Promise<IProxyYamlInfo> {
   // console.debug('generateProxyConfigYaml: envConfig', envConfig)
 
-  const selfNodes = getSelfNodeData();
+  const selfNodes = await getSelfNodeData(env);
   const mergeNodes = selfNodes.concat(totalNode);
   const totalAndSelfNodes = selfNodes.length > 0 ? [{name: '自建节点'}, ...totalNode] : totalNode;
   // console.debug('generateProxyConfigYaml: selfNodes', selfNodes);
