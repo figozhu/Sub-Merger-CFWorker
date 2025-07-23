@@ -11,108 +11,55 @@ mode: Rule
 log-level: info
 external-controller: 127.0.0.1:60000
 dns:
-    enable: true
-    ipv6: true
-    default-nameserver: [223.5.5.5, 119.29.29.29]
-    enhanced-mode: fake-ip
-    fake-ip-range: 198.18.0.1/16
-    fake-ip-filter:
-      - '*.lan'
-      - '*.localdomain'
-      - '*.example'
-      - '*.invalid'
-      - '*.localhost'
-      - '*.test'
-      - '*.local'
-      - '*.home.arpa'
-      - time.*.com
-      - time.*.gov
-      - time.*.edu.cn
-      - time.*.apple.com
-      - time1.*.com
-      - time2.*.com
-      - time3.*.com
-      - time4.*.com
-      - time5.*.com
-      - time6.*.com
-      - time7.*.com
-      - ntp.*.com
-      - ntp1.*.com
-      - ntp2.*.com
-      - ntp3.*.com
-      - ntp4.*.com
-      - ntp5.*.com
-      - ntp6.*.com
-      - ntp7.*.com
-      - '*.time.edu.cn'
-      - '*.ntp.org.cn'
-      - +.pool.ntp.org
-      - time1.cloud.tencent.com
-      - music.163.com
-      - '*.music.163.com'
-      - '*.126.net'
-      - musicapi.taihe.com
-      - music.taihe.com
-      - songsearch.kugou.com
-      - trackercdn.kugou.com
-      - '*.kuwo.cn'
-      - api-jooxtt.sanook.com
-      - api.joox.com
-      - joox.com
-      - y.qq.com
-      - '*.y.qq.com'
-      - streamoc.music.tc.qq.com
-      - mobileoc.music.tc.qq.com
-      - isure.stream.qqmusic.qq.com
-      - dl.stream.qqmusic.qq.com
-      - aqqmusic.tc.qq.com
-      - amobile.music.tc.qq.com
-      - '*.xiami.com'
-      - '*.music.migu.cn'
-      - music.migu.cn
-      - '*.msftconnecttest.com'
-      - '*.msftncsi.com'
-      - msftconnecttest.com
-      - msftncsi.com
-      - localhost.ptlogin2.qq.com
-      - localhost.sec.qq.com
-      - +.srv.nintendo.net
-      - +.stun.playstation.net
-      - xbox.*.microsoft.com
-      - '*.*.xboxlive.com'
-      - +.battlenet.com.cn
-      - +.wotgame.cn
-      - +.wggames.cn
-      - +.wowsgame.cn
-      - +.wargaming.net
-      - proxy.golang.org
-      - stun.*.*
-      - stun.*.*.*
-      - +.stun.*.*
-      - +.stun.*.*.*
-      - +.stun.*.*.*.*
-      - heartbeat.belkin.com
-      - '*.linksys.com'
-      - '*.linksyssmartwifi.com'
-      - '*.router.asus.com'
-      - mesu.apple.com
-      - swscan.apple.com
-      - swquery.apple.com
-      - swdownload.apple.com
-      - swcdn.apple.com
-      - swdist.apple.com
-      - lens.l.google.com
-      - stun.l.google.com
-      - +.nflxvideo.net
-      - '*.square-enix.com'
-      - '*.finalfantasyxiv.com'
-      - '*.ffxiv.com'
-      - '*.mcdn.bilivideo.cn'
-      - WORKGROUP
-    use-hosts: true
-    nameserver: ['https://doh.pub/dns-query', 'https://dns.alidns.com/dns-query']
-    fallback: ['https://doh.dns.sb/dns-query', 'https://dns.cloudflare.com/dns-query', 'https://dns.twnic.tw/dns-query', 'tls://8.8.4.4:853']
-    fallback-filter: { geoip: true, ipcidr: [0.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 172.16.0.0/12, 192.88.99.0/24, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 240.0.0.0/4, 255.255.255.255/32] }
+  enable: true
+  listen: ':53'
+  enhanced-mode: 'fake-ip'
+  fake-ip-range: '198.18.0.1/16'
+  fake-ip-filter-mode: 'blacklist'
+  prefer-h3: false
+  respect-rules: false
+  use-hosts: false
+  use-system-hosts: false
+  ipv6: true
+  fake-ip-filter:
+    - '*.lan'
+    - '*.local'
+    - '*.arpa'
+    - 'time.*.com'
+    - 'ntp.*.com'
+    - 'time.*.com'
+    - '+.market.xiaomi.com'
+    - 'localhost.ptlogin2.qq.com'
+    - '*.msftncsi.com'
+    - 'www.msftconnecttest.com'
+  default-nameserver:
+    - 'system'
+    - '223.6.6.6'
+    - '8.8.8.8'
+    - '2400:3200::1'
+    - '2001:4860:4860::8888'
+  nameserver:
+    - '8.8.8.8'
+    - 'https://doh.pub/dns-query'
+    - 'https://dns.alidns.com/dns-query'
+  direct-nameserver-follow-policy: false
+  fallback-filter:
+    geoip: true
+    geoip-code: 'CN'
+    ipcidr:
+      - '240.0.0.0/4'
+      - '0.0.0.0/32'
+    domain:
+      - '+.google.com'
+      - '+.facebook.com'
+      - '+.youtube.com'
+  fallback: []
+  proxy-server-nameserver:
+    - 'https://doh.pub/dns-query'
+    - 'https://dns.alidns.com/dns-query'
+    - 'tls://223.5.5.5'
+  direct-nameserver: []
+
 
 # MARK: 规则集
 rule-providers:
