@@ -33,7 +33,7 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
 
   const selfNodes = await getSelfNodeData(env);
   const mergeNodes = selfNodes.concat(totalNode);
-  const totalAndSelfNodes = selfNodes.length > 0 ? [{name: '自建节点'}, ...totalNode] : totalNode;
+  const totalAndSelfNodes = selfNodes.length > 0 ? [{name: '自建节点'}, ...selfNodes, ...totalNode] : totalNode;
   // console.debug('generateProxyConfigYaml: selfNodes', selfNodes);
   // console.debug('generateProxyConfigYaml: mergeNodes', mergeNodes);
 
