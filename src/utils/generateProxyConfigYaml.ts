@@ -167,7 +167,7 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : uniqueNodesArr(otherNodesForStash.map((node: any) => node.name)),
     },
     {
-      name: 'MediaTelegram',
+      name: 'IM-Telegram',
       type: 'select',
       proxies: uniqueNodesArr(telegramNodesForStash.map((node: any) => node.name)),
     },
@@ -177,17 +177,17 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       proxies: uniqueNodesArr(binanceNodesForStash.map((node: any) => node.name)),
     },
     {
-      name: 'WhatsApp',
+      name: 'IM-WhatsApp',
       type: 'select',
       proxies: uniqueNodesArr(whatsappNodesForStash.map((node: any) => node.name)),
     },
     {
-      name: 'MediaYouTube',
+      name: 'Media-YouTube',
       type: 'select',
       proxies: uniqueNodesArr(youtubeNodesForStash.map((node: any) => node.name)),
     },
     {
-        name: 'MediaTwitter',
+        name: 'Media-Twitter',
         type: 'select',
         proxies: uniqueNodesArr(twitterNodesForStash.map((node: any) => node.name)),
     },
