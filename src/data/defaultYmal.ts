@@ -98,6 +98,18 @@ rule-providers:
     url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/SteamCN/SteamCN.yaml"
     path: ./RuleSet/SteamCN.yaml
     interval: 86400
+  Binance:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Binance/Binance.yaml"
+    path: ./RuleSet/Binance.yaml
+    interval: 86400
+  Whatsapp:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Whatsapp/Whatsapp.yaml"
+    path: ./RuleSet/Whatsapp.yaml
+    interval: 86400
   proxy:
     type: http
     behavior: domain
@@ -150,6 +162,36 @@ rule-providers:
 # MARK: 路由规则
 rules:
 
+  # 服务器
+  - IP-CIDR,13.229.232.0/24,DIRECT,no-resolve
+  - IP-CIDR,122.248.212.0/24,DIRECT,no-resolve
+  - IP-CIDR,23.185.168.0/24,DIRECT,no-resolve
+  - IP-CIDR,38.49.55.0/24,DIRECT,no-resolve
+  - IP-CIDR,38.102.249.0/24,DIRECT,no-resolve
+  - IP-CIDR,216.151.168.0/24,DIRECT,no-resolve
+
+  # 规则匹配
+  - DOMAIN-SUFFIX,chzhshch.org,直接连接,no-resolve
+  - DOMAIN-SUFFIX,figozhu.xyz,直接连接,no-resolve
+  - DOMAIN-SUFFIX,tu-zi.com,直接连接,no-resolve
+  - DOMAIN-SUFFIX,one.api4gpt.com,直接连接,no-resolve
+  - DOMAIN-SUFFIX,anyrouter.top,直接连接,no-resolve
+  - DOMAIN-SUFFIX,rainapp.top,直接连接,no-resolve
+  - DOMAIN-SUFFIX,immersivetranslate.com,直接连接,no-resolve
+  - DOMAIN-SUFFIX,filesystem.site,直接连接,no-resolve
+  - DOMAIN-SUFFIX,bing.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,a-nomad.com,直接连接,no-resolve
+  - DOMAIN-SUFFIX,api2d.net,直接连接,no-resolve
+  - DOMAIN-SUFFIX,appstorrent.ru,其它流量,no-resolve
+
+  - RULE-SET,Binance,币安,no-resolve
+  - RULE-SET,Whatsapp,IM-WhatsApp,no-resolve
+  - RULE-SET,Youtube,Media-YouTube,no-resolve
+  - RULE-SET,Twitter,Media-Twitter,no-resolve
+  - RULE-SET,Telegram,IM-Telegram,no-resolve
+  - RULE-SET,SteamCN,直接连接,no-resolve
+  - RULE-SET,Steam,GameSteam,no-resolve
+
   # 进程
   
   # ClubGG
@@ -161,8 +203,11 @@ rules:
   - DOMAIN-SUFFIX,rum-api.clubgg.com,DIRECT,no-resolve
   - DOMAIN-SUFFIX,apigw-client.good-game-service.com,DIRECT,no-resolve
 
-  # GGPoker
+  # PokerClient
   - PROCESS-NAME,GGnet.exe,PokerClient
+  - PROCESS-NAME,PokerStars.exe,PokerClient
+  - DOMAIN-SUFFIX,gtowizard.com,DIRECT,no-resolve
+  - DOMAIN-KEYWORD,gtowizard-org-,DIRECT,no-resolve
 
   - PROCESS-NAME,v2ray,DIRECT
   - PROCESS-NAME,xray,DIRECT
@@ -230,28 +275,7 @@ rules:
   - DOMAIN-SUFFIX,emby.wtf,EMBY,no-resolve
   - DOMAIN-SUFFIX,term.wtf,EMBY,no-resolve
   - DOMAIN-SUFFIX,emby1.69yun69.com,EMBY,no-resolve
-  
-
-  # 规则匹配
-  - DOMAIN-SUFFIX,chzhshch.org,直接连接,no-resolve
-  - DOMAIN-SUFFIX,figozhu.xyz,直接连接,no-resolve
-  - DOMAIN-SUFFIX,tu-zi.com,直接连接,no-resolve
-  - DOMAIN-SUFFIX,one.api4gpt.com,直接连接,no-resolve
-  - DOMAIN-SUFFIX,anyrouter.top,直接连接,no-resolve
-  - DOMAIN-SUFFIX,immersivetranslate.com,直接连接,no-resolve
-  - DOMAIN-SUFFIX,filesystem.site,直接连接,no-resolve
-  - DOMAIN-SUFFIX,bing.com,其它流量,no-resolve
-  - DOMAIN-SUFFIX,a-nomad.com,直接连接,no-resolve
-  - DOMAIN-SUFFIX,api2d.net,直接连接,no-resolve
-  - DOMAIN-SUFFIX,appstorrent.ru,其它流量,no-resolve
-
-  - RULE-SET,Youtube,MediaYouTube,no-resolve
-  - RULE-SET,Twitter,MediaTwitter,no-resolve
-  - RULE-SET,Telegram,MediaTelegram,no-resolve
-  - RULE-SET,SteamCN,直接连接,no-resolve
-  - RULE-SET,Steam,GameSteam,no-resolve
-
-  
+    
   - GEOIP,LAN,DIRECT,no-resolve
   - GEOIP,CN,DIRECT,no-resolve
   - RULE-SET,proxy,其它流量,no-resolve
