@@ -33,7 +33,7 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
 
   const selfNodes = await getSelfNodeData(env);
   const mergeNodes = selfNodes.concat(totalNode);
-  const totalAndSelfNodes = selfNodes.length > 0 ? [{name: '自建节点'}, ...selfNodes, ...totalNode] : totalNode;
+
   // console.debug('generateProxyConfigYaml: selfNodes', selfNodes);
   // console.debug('generateProxyConfigYaml: mergeNodes', mergeNodes);
 
@@ -43,8 +43,12 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
 
  
   const allowNodes = filterNodes(realTotalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  let otherNodes = filterNodes(totalNode, envConfig.OTHER_MATCH_PATTERN || '', false);
+  const totalAndSelfNodes = selfNodes.length > 0 ? [{name: '自建节点'}, ...selfNodes, ...allowNodes] : allowNodes;
+
+  let otherNodes = filterNodes(allowNodes, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodes = filterNodes(otherNodes, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
+  let proxyNodes = filterNodes(allowNodes, envConfig.PROXY_MATCH_PATTERN || '', false);
+  proxyNodes = filterNodes(proxyNodes, envConfig.PROXY_EXCLUDE_PATTERN || '', true);
   let binanceNodes = filterNodes(allowNodes, envConfig.BINANCE_MATCH_PATTERN || '', false);
   binanceNodes = filterNodes(binanceNodes, envConfig.BINANCE_EXCLUDE_PATTERN || '', true);
   let youtubeNodes = filterNodes(totalAndSelfNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
@@ -65,8 +69,10 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
   const allowNodesForStash = filterNodesForStash(realTotalNode, envConfig.EXCLUDE_PATTERN || '', true);
-  let otherNodesForStash = filterNodes(totalNode, envConfig.OTHER_MATCH_PATTERN || '', false);
+  let otherNodesForStash = filterNodes(allowNodesForStash, envConfig.OTHER_MATCH_PATTERN || '', false);
   otherNodesForStash = filterNodes(otherNodesForStash, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
+  let proxyNodesForStash = filterNodes(allowNodesForStash, envConfig.PROXY_MATCH_PATTERN || '', false);
+  proxyNodesForStash = filterNodes(proxyNodesForStash, envConfig.PROXY_EXCLUDE_PATTERN || '', true);
   let binanceNodesForStash = filterNodes(allowNodesForStash, envConfig.BINANCE_MATCH_PATTERN || '', false);
   binanceNodesForStash = filterNodes(binanceNodesForStash, envConfig.BINANCE_EXCLUDE_PATTERN || '', true);
   let youtubeNodesForStash = filterNodes(totalAndSelfNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
@@ -92,6 +98,11 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
         name: '其它流量',
         type: 'select',
         proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : uniqueNodesArr(otherNodes.map((node: any) => node.name)),
+    },
+    {
+        name: '中转代理',
+        type: 'select',
+        proxies: uniqueNodesArr(proxyNodes.map((node: any) => node.name)),
     },
     {
       name: 'IM-Telegram',
@@ -165,6 +176,11 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       name: '其它流量',
       type: 'select',
       proxies: selfNodes.length > 0 ? ['自建节点', '机场节点'] : uniqueNodesArr(otherNodesForStash.map((node: any) => node.name)),
+    },
+    {
+        name: '中转代理',
+        type: 'select',
+        proxies: uniqueNodesArr(proxyNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'IM-Telegram',

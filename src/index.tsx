@@ -42,6 +42,7 @@ type Bindings = {
     TELEGRAM_MATCH_PATTERN: string
     STEAM_MATCH_PATTERN: string
     POKER_MATCH_PATTERN: string
+    PROXY_MATCH_PATTERN: string
     FALLBACK_EXCLUDE_PATTERN: string
     OTHER_EXCLUDE_PATTERN: string
     YOUTUBE_EXCLUDE_PATTERN: string
@@ -50,6 +51,7 @@ type Bindings = {
     TELEGRAM_EXCLUDE_PATTERN: string
     STEAM_EXCLUDE_PATTERN: string
     POKER_EXCLUDE_PATTERN: string
+    PROXY_EXCLUDE_PATTERN: string
   }
   SUBSCRIBE_PATTERN: {
     EXCLUDE_PATTERN: string
@@ -60,6 +62,7 @@ type Bindings = {
     TELEGRAM_MATCH_PATTERN: string
     STEAM_MATCH_PATTERN: string
     POKER_MATCH_PATTERN: string
+    PROXY_MATCH_PATTERN: string
     FALLBACK_EXCLUDE_PATTERN: string
     OTHER_EXCLUDE_PATTERN: string
     YOUTUBE_EXCLUDE_PATTERN: string
@@ -67,6 +70,7 @@ type Bindings = {
     TELEGRAM_EXCLUDE_PATTERN: string
     STEAM_EXCLUDE_PATTERN: string
     POKER_EXCLUDE_PATTERN: string
+    PROXY_EXCLUDE_PATTERN: string
   }
 }
 
