@@ -51,12 +51,12 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   proxyNodes = filterNodes(proxyNodes, envConfig.PROXY_EXCLUDE_PATTERN || '', true);
   let binanceNodes = filterNodes(allowNodes, envConfig.BINANCE_MATCH_PATTERN || '', false);
   binanceNodes = filterNodes(binanceNodes, envConfig.BINANCE_EXCLUDE_PATTERN || '', true);
-  let youtubeNodes = filterNodes(totalAndSelfNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
-  youtubeNodes = filterNodes(youtubeNodes, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
+  let mediaNodes = filterNodes(totalAndSelfNodes, envConfig.MEDIA_MATCH_PATTERN || '', false);
+  mediaNodes = filterNodes(mediaNodes, envConfig.MEDIA_EXCLUDE_PATTERN || '', true);
   let embyNodes = filterNodes(totalAndSelfNodes, envConfig.EMBY_MATCH_PATTERN || '', false);
   embyNodes = filterNodes(embyNodes, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
-  let twitterNodes = filterNodes(totalAndSelfNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
-  twitterNodes = filterNodes(twitterNodes, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
+  let aiNodes = filterNodes(totalAndSelfNodes, envConfig.AI_MATCH_PATTERN || '', false);
+  aiNodes = filterNodes(aiNodes, envConfig.AI_EXCLUDE_PATTERN || '', true);
   let whatsappNodes = filterNodes(totalAndSelfNodes, envConfig.WHATSAPP_MATCH_PATTERN || '', false);
   whatsappNodes = filterNodes(whatsappNodes, envConfig.WHATSAPP_EXCLUDE_PATTERN || '', true);
   let telegramNodes = filterNodes(allowNodes, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
@@ -75,14 +75,14 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   proxyNodesForStash = filterNodes(proxyNodesForStash, envConfig.PROXY_EXCLUDE_PATTERN || '', true);
   let binanceNodesForStash = filterNodes(allowNodesForStash, envConfig.BINANCE_MATCH_PATTERN || '', false);
   binanceNodesForStash = filterNodes(binanceNodesForStash, envConfig.BINANCE_EXCLUDE_PATTERN || '', true);
-  let youtubeNodesForStash = filterNodes(totalAndSelfNodes, envConfig.YOUTUBE_MATCH_PATTERN || '', false);
-  youtubeNodesForStash = filterNodes(youtubeNodesForStash, envConfig.YOUTUBE_EXCLUDE_PATTERN || '', true);
+  let mediaNodesForStash = filterNodes(totalAndSelfNodes, envConfig.MEDIA_MATCH_PATTERN || '', false);
+  mediaNodesForStash = filterNodes(mediaNodesForStash, envConfig.MEDIA_EXCLUDE_PATTERN || '', true);
   let embyNodesForStash = filterNodes(totalAndSelfNodes, envConfig.EMBY_MATCH_PATTERN || '', false);
   embyNodesForStash = filterNodes(embyNodesForStash, envConfig.EMBY_EXCLUDE_PATTERN || '', true);
   let whatsappNodesForStash = filterNodes(totalAndSelfNodes, envConfig.WHATSAPP_MATCH_PATTERN || '', false);
   whatsappNodesForStash = filterNodes(whatsappNodesForStash, envConfig.WHATSAPP_EXCLUDE_PATTERN || '', true);
-  let twitterNodesForStash = filterNodes(totalAndSelfNodes, envConfig.TWITTER_MATCH_PATTERN || '', false);
-  twitterNodesForStash = filterNodes(twitterNodesForStash, envConfig.TWITTER_EXCLUDE_PATTERN || '', true);
+  let aiNodesForStash = filterNodes(totalAndSelfNodes, envConfig.AI_MATCH_PATTERN || '', false);
+  aiNodesForStash = filterNodes(aiNodesForStash, envConfig.AI_EXCLUDE_PATTERN || '', true);
   let telegramNodesForStash = filterNodes(allowNodesForStash, envConfig.TELEGRAM_MATCH_PATTERN || '', false);
   telegramNodesForStash = filterNodes(telegramNodesForStash, envConfig.TELEGRAM_EXCLUDE_PATTERN || '', true);
   let steamNodesForStash = filterNodes(allowNodesForStash, envConfig.STEAM_MATCH_PATTERN || '', false);
@@ -120,14 +120,14 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       proxies: uniqueNodesArr(whatsappNodes.map((node: any) => node.name)),
     },
     {
-      name: 'Media-YouTube',
+      name: '海外AI',
       type: 'select',
-      proxies: uniqueNodesArr(youtubeNodes.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(mediaNodes.map((node: any) => node.name)),
     },
     {
-      name: 'Media-Twitter',
+      name: '海外媒体',
       type: 'select',
-      proxies: uniqueNodesArr(twitterNodes.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(aiNodes.map((node: any) => node.name)),
     },
     {
       name: 'PokerClient',
@@ -198,14 +198,14 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       proxies: uniqueNodesArr(whatsappNodesForStash.map((node: any) => node.name)),
     },
     {
-      name: 'Media-YouTube',
+      name: '海外AI',
       type: 'select',
-      proxies: uniqueNodesArr(youtubeNodesForStash.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(mediaNodesForStash.map((node: any) => node.name)),
     },
     {
-        name: 'Media-Twitter',
+        name: '海外媒体',
         type: 'select',
-        proxies: uniqueNodesArr(twitterNodesForStash.map((node: any) => node.name)),
+        proxies: uniqueNodesArr(aiNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'PokerClient',

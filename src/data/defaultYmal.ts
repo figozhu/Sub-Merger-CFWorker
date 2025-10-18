@@ -64,9 +64,57 @@ dns:
 rule-providers:
   reject:
     type: http
-    behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt"
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/AdvertisingLite/AdvertisingLite_Classical.yaml"
     path: ./RuleSet/reject.yaml
+    interval: 86400
+  OpenAI:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/OpenAI/OpenAI.yaml"
+    path: ./RuleSet/OpenAI.yaml
+    interval: 86400
+  Gemini:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Gemini/Gemini.yaml"
+    path: ./RuleSet/Gemini.yaml
+    interval: 86400
+  Anthropic:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Anthropic/Anthropic.yaml"
+    path: ./RuleSet/Anthropic.yaml
+    interval: 86400
+  Claude:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Claude/Claude.yaml"
+    path: ./RuleSet/Claude.yaml
+    interval: 86400
+  Apple:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Apple/Apple.yaml"
+    path: ./RuleSet/Apple.yaml
+    interval: 86400
+  Siri:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Siri/Siri.yaml"
+    path: ./RuleSet/Siri.yaml
+    interval: 86400
+  Google:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Google/Google.yaml"
+    path: ./RuleSet/Google.yaml
+    interval: 86400
+  NPMjs:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Npmjs/Npmjs.yaml"
+    path: ./RuleSet/NPMjs.yaml
     interval: 86400
   Youtube:
     type: http
@@ -163,12 +211,26 @@ rule-providers:
 rules:
 
   # 服务器
-  - IP-CIDR,13.229.232.0/24,DIRECT,no-resolve
-  - IP-CIDR,122.248.212.0/24,DIRECT,no-resolve
+  - IP-CIDR,13.229.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,122.248.0.0/16,DIRECT,no-resolve
   - IP-CIDR,23.185.168.0/24,DIRECT,no-resolve
-  - IP-CIDR,38.49.55.0/24,DIRECT,no-resolve
-  - IP-CIDR,38.102.249.0/24,DIRECT,no-resolve
+  - IP-CIDR,38.78.145.0/24,DIRECT,no-resolve
   - IP-CIDR,216.151.168.0/24,DIRECT,no-resolve
+  - IP-CIDR,45.152.240.0/24,DIRECT,no-resolve
+  - IP-CIDR,113.192.61.0/24,DIRECT,no-resolv
+  - IP-CIDR,66.253.43.0/24,DIRECT,no-resolve
+  - IP-CIDR,185.194.54.0/24,DIRECT,no-resolve
+
+  # AI(OpenAI, Anthropic/Claude, Gemini)
+  - RULE-SET,OpenAI,海外AI,no-resolve
+  - RULE-SET,Gemini,海外AI,no-resolve
+  - RULE-SET,Anthropic,海外AI,no-resolve
+  - RULE-SET,Claude,海外AI,no-resolve
+
+  # 媒体（YouTube、Twitter）
+  - RULE-SET,Youtube,海外媒体,no-resolve
+  - RULE-SET,Twitter,海外媒体,no-resolve
+
 
   # 规则匹配
   - DOMAIN-SUFFIX,chzhshch.org,直接连接,no-resolve
@@ -183,11 +245,27 @@ rules:
   - DOMAIN-SUFFIX,a-nomad.com,直接连接,no-resolve
   - DOMAIN-SUFFIX,api2d.net,直接连接,no-resolve
   - DOMAIN-SUFFIX,appstorrent.ru,其它流量,no-resolve
+  - DOMAIN-SUFFIX,figma.com,直接连接,no-resolve
 
+  # Apple-Intelligence
+  - DOMAIN-SUFFIX,apple-relay.apple.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,apple-relay.fastly-edge.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,apple-relay.cloudflare.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,gateway.icloud.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,cp4.cloudflare.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,gspe1-ssl.ls.apple.com,其它流量,no-resolve
+  - DOMAIN-SUFFIX,apps.mzstatic.com,其它流量,no-resolve
+  - RULE-SET,Apple,其它流量,no-resolve
+  - RULE-SET,Siri,其它流量,no-resolve
+
+  # 币圈
   - RULE-SET,Binance,币安,no-resolve
+  - DOMAIN-SUFFIX,roogoo.com,直接连接,no-resolve
+
+  # 指定应用
+  - RULE-SET,Google,其它流量,no-resolve
+  - RULE-SET,NPMjs,中转代理,no-resolve
   - RULE-SET,Whatsapp,IM-WhatsApp,no-resolve
-  - RULE-SET,Youtube,Media-YouTube,no-resolve
-  - RULE-SET,Twitter,Media-Twitter,no-resolve
   - RULE-SET,Telegram,IM-Telegram,no-resolve
   - RULE-SET,SteamCN,直接连接,no-resolve
   - RULE-SET,Steam,GameSteam,no-resolve
@@ -208,6 +286,9 @@ rules:
   - PROCESS-NAME,PokerStars.exe,PokerClient
   - DOMAIN-SUFFIX,gtowizard.com,DIRECT,no-resolve
   - DOMAIN-KEYWORD,gtowizard-org-,DIRECT,no-resolve
+
+  # 雀魂
+  - PROCESS-NAME,Jantama_MahjongSoul.exe,DIRECT,no-resolve
 
   - PROCESS-NAME,v2ray,DIRECT
   - PROCESS-NAME,xray,DIRECT
