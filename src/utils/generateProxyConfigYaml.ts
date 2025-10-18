@@ -65,6 +65,10 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   steamNodes = filterNodes(steamNodes, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
   let pokerNodes = filterNodes(allowNodes, envConfig.POKER_MATCH_PATTERN || '', false);
   pokerNodes = filterNodes(pokerNodes, envConfig.POKER_EXCLUDE_PATTERN || '', true);
+  let taiwanNodes = filterNodes(totalAndSelfNodes, envConfig.TAIWAN_MATCH_PATTERN || '', false);
+  taiwanNodes = filterNodes(taiwanNodes, envConfig.TAIWAN_EXCLUDE_PATTERN || '', true);
+  let taiguoNodes = filterNodes(totalAndSelfNodes, envConfig.TAIGUO_MATCH_PATTERN || '', false);
+  taiguoNodes = filterNodes(taiguoNodes, envConfig.TAIGUO_EXCLUDE_PATTERN || '', true);
   let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
@@ -89,6 +93,10 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   steamNodesForStash = filterNodes(steamNodesForStash, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
   let pokerNodesForStash = filterNodes(allowNodesForStash, envConfig.POKER_MATCH_PATTERN || '', false);
   pokerNodesForStash = filterNodes(pokerNodesForStash, envConfig.POKER_EXCLUDE_PATTERN || '', true);
+  let taiwanNodesForStash = filterNodes(totalAndSelfNodes, envConfig.TAIWAN_MATCH_PATTERN || '', false);
+  taiwanNodesForStash = filterNodes(taiwanNodesForStash, envConfig.TAIWAN_EXCLUDE_PATTERN || '', true);
+  let taiguoNodesForStash = filterNodes(totalAndSelfNodes, envConfig.TAIGUO_MATCH_PATTERN || '', false);
+  taiguoNodesForStash = filterNodes(taiguoNodesForStash, envConfig.TAIGUO_EXCLUDE_PATTERN || '', true);
   let fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodesForStash = filterNodes(fallbackNodesForStash, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
@@ -133,6 +141,16 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       name: 'PokerClient',
       type: 'select',
       proxies: uniqueNodesArr(['直接连接', ...pokerNodes.map((node: any) => node.name)]),
+    },
+    {
+      name: '泰国节点',
+      type: 'select',
+      proxies: uniqueNodesArr(taiguoNodes.map((node: any) => node.name)),
+    },
+    {
+      name: '台湾节点',
+      type: 'select',
+      proxies: uniqueNodesArr(taiwanNodes.map((node: any) => node.name)),
     },
     {
       name: 'GameSteam',
@@ -211,6 +229,16 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       name: 'PokerClient',
       type: 'select',
       proxies: uniqueNodesArr(['直接连接', ...pokerNodesForStash.map((node: any) => node.name)]),
+    },
+    {
+      name: '泰国节点',
+      type: 'select',
+      proxies: uniqueNodesArr(taiguoNodesForStash.map((node: any) => node.name)),
+    },
+    {
+      name: '台湾节点',
+      type: 'select',
+      proxies: uniqueNodesArr(taiwanNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'GameSteam',
