@@ -43,7 +43,6 @@ type Bindings = {
     STEAM_MATCH_PATTERN: string
     POKER_MATCH_PATTERN: string
     PROXY_MATCH_PATTERN: string
-    RIBEN_MATCH_PATTERN: string
     TAIGUO_MATCH_PATTERN: string
 
     FALLBACK_EXCLUDE_PATTERN: string
@@ -55,7 +54,6 @@ type Bindings = {
     STEAM_EXCLUDE_PATTERN: string
     POKER_EXCLUDE_PATTERN: string
     PROXY_EXCLUDE_PATTERN: string
-    RIBEN_EXCLUDE_PATTERN: string
     TAIGUO_EXCLUDE_PATTERN: string
   }
   SUBSCRIBE_PATTERN: {
@@ -68,7 +66,6 @@ type Bindings = {
     STEAM_MATCH_PATTERN: string
     POKER_MATCH_PATTERN: string
     PROXY_MATCH_PATTERN: string
-    BIREN_MATCH_PATTERN: string
     TAIGUO_MATCH_PATTERN: string
 
     FALLBACK_EXCLUDE_PATTERN: string
@@ -79,7 +76,6 @@ type Bindings = {
     STEAM_EXCLUDE_PATTERN: string
     POKER_EXCLUDE_PATTERN: string
     PROXY_EXCLUDE_PATTERN: string
-    RIBEN_EXCLUDE_PATTERN: string
     TAIGUO_EXCLUDE_PATTERN: string
   }
 }

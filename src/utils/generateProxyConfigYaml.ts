@@ -65,8 +65,6 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   steamNodes = filterNodes(steamNodes, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
   let pokerNodes = filterNodes(allowNodes, envConfig.POKER_MATCH_PATTERN || '', false);
   pokerNodes = filterNodes(pokerNodes, envConfig.POKER_EXCLUDE_PATTERN || '', true);
-  let ribenNodes = filterNodes(totalAndSelfNodes, envConfig.RIBEN_MATCH_PATTERN || '', false);
-  ribenNodes = filterNodes(ribenNodes, envConfig.RIBEN_EXCLUDE_PATTERN || '', true);
   let taiguoNodes = filterNodes(totalAndSelfNodes, envConfig.TAIGUO_MATCH_PATTERN || '', false);
   taiguoNodes = filterNodes(taiguoNodes, envConfig.TAIGUO_EXCLUDE_PATTERN || '', true);
   let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
@@ -93,8 +91,6 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   steamNodesForStash = filterNodes(steamNodesForStash, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
   let pokerNodesForStash = filterNodes(allowNodesForStash, envConfig.POKER_MATCH_PATTERN || '', false);
   pokerNodesForStash = filterNodes(pokerNodesForStash, envConfig.POKER_EXCLUDE_PATTERN || '', true);
-  let ribenNodesForStash = filterNodes(totalAndSelfNodes, envConfig.RIBEN_MATCH_PATTERN || '', false);
-  ribenNodesForStash = filterNodes(ribenNodesForStash, envConfig.RIBEN_EXCLUDE_PATTERN || '', true);
   let taiguoNodesForStash = filterNodes(totalAndSelfNodes, envConfig.TAIGUO_MATCH_PATTERN || '', false);
   taiguoNodesForStash = filterNodes(taiguoNodesForStash, envConfig.TAIGUO_EXCLUDE_PATTERN || '', true);
   let fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_MATCH_PATTERN || '', false);
@@ -146,11 +142,6 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       name: '泰国节点',
       type: 'select',
       proxies: uniqueNodesArr(taiguoNodes.map((node: any) => node.name)),
-    },
-    {
-      name: '日本节点',
-      type: 'select',
-      proxies: uniqueNodesArr(ribenNodes.map((node: any) => node.name)),
     },
     {
       name: 'GameSteam',
@@ -234,11 +225,6 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       name: '泰国节点',
       type: 'select',
       proxies: uniqueNodesArr(taiguoNodesForStash.map((node: any) => node.name)),
-    },
-    {
-      name: '日本节点',
-      type: 'select',
-      proxies: uniqueNodesArr(ribenNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'GameSteam',
