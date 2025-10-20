@@ -1,8 +1,8 @@
 const defaultYamlString = `
+
 #---------------------------------------------------#
 ## 自定义Clash配置 
 #---------------------------------------------------#
-
 
 mixed-port: 7890
 allow-lan: false
@@ -57,158 +57,161 @@ dns:
     - 'https://doh.pub/dns-query'
     - 'https://dns.alidns.com/dns-query'
     - 'tls://223.5.5.5'
-  direct-nameserver: []
-
+  direct-nameserver:
+    - system
 
 # MARK: 规则集
 rule-providers:
   reject:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/AdvertisingLite/AdvertisingLite_Classical.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/AdvertisingLite/AdvertisingLite_Classical.yaml"
     path: ./RuleSet/reject.yaml
     interval: 86400
   OpenAI:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/OpenAI/OpenAI.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/OpenAI/OpenAI.yaml"
     path: ./RuleSet/OpenAI.yaml
     interval: 86400
   Gemini:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Gemini/Gemini.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Gemini/Gemini.yaml"
     path: ./RuleSet/Gemini.yaml
     interval: 86400
   Anthropic:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Anthropic/Anthropic.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Anthropic/Anthropic.yaml"
     path: ./RuleSet/Anthropic.yaml
     interval: 86400
   Claude:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Claude/Claude.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Claude/Claude.yaml"
     path: ./RuleSet/Claude.yaml
     interval: 86400
   Apple:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Apple/Apple.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Apple/Apple.yaml"
     path: ./RuleSet/Apple.yaml
     interval: 86400
   Siri:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Siri/Siri.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Siri/Siri.yaml"
     path: ./RuleSet/Siri.yaml
     interval: 86400
   Google:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Google/Google.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Google/Google.yaml"
     path: ./RuleSet/Google.yaml
     interval: 86400
   NPMjs:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Npmjs/Npmjs.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Npmjs/Npmjs.yaml"
     path: ./RuleSet/NPMjs.yaml
     interval: 86400
   Youtube:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/YouTube/YouTube.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/YouTube/YouTube.yaml"
     path: ./RuleSet/Youtube.yaml
     interval: 86400
   Twitter:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Twitter/Twitter.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Twitter/Twitter.yaml"
     path: ./RuleSet/Twitter.yaml
     interval: 86400
   Telegram:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Telegram/Telegram.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Telegram/Telegram.yaml"
     path: ./RuleSet/Telegram.yaml
     interval: 86400
   Steam:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Steam/Steam.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/Steam/Steam.yaml"
     path: ./RuleSet/Steam.yaml
     interval: 86400
   SteamCN:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/SteamCN/SteamCN.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@release/rule/Clash/SteamCN/SteamCN.yaml"
     path: ./RuleSet/SteamCN.yaml
     interval: 86400
   Binance:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Binance/Binance.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Binance/Binance.yaml"
     path: ./RuleSet/Binance.yaml
     interval: 86400
   Whatsapp:
     type: http
     behavior: classical
-    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Whatsapp/Whatsapp.yaml"
+    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Whatsapp/Whatsapp.yaml"
     path: ./RuleSet/Whatsapp.yaml
     interval: 86400
   proxy:
     type: http
     behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt"
     path: ./RuleSet/proxy.yaml
     interval: 86400
   direct:
     type: http
     behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt"
     path: ./RuleSet/direct.yaml
     interval: 86400
   private:
     type: http
     behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/private.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/private.txt"
     path: ./RuleSet/private.yaml
     interval: 86400
   gfw:
     type: http
     behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/gfw.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/gfw.txt"
     path: ./RuleSet/gfw.yaml
     interval: 86400
   greatfire:
     type: http
     behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/greatfire.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/greatfire.txt"
     path: ./RuleSet/greatfire.yaml
     interval: 86400
   tld-not-cn:
     type: http
     behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/tld-not-cn.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/tld-not-cn.txt"
     path: ./RuleSet/tld-not-cn.yaml
     interval: 86400
   cncidr:
     type: http
     behavior: ipcidr
-    url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt"
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt"
     path: ./RuleSet/cncidr.yaml
     interval: 86400
   lancidr:
      type: http
      behavior: ipcidr
-     url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt"
+     url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt"
      path: ./RuleSet/lancidr.yaml
      interval: 86400
 
 # MARK: 路由规则
 rules:
+
+  #避免clashmi报错
+  - DOMAIN-SUFFIX,fastly.jsdelivr.net,直接连接,no-resolve
 
   # 服务器
   - IP-CIDR,13.229.0.0/16,DIRECT,no-resolve
@@ -226,6 +229,7 @@ rules:
   - RULE-SET,Gemini,海外AI,no-resolve
   - RULE-SET,Anthropic,海外AI,no-resolve
   - RULE-SET,Claude,海外AI,no-resolve
+  - RULE-SET,Google,海外AI,no-resolve
 
   # 媒体（YouTube、Twitter）
   - RULE-SET,Youtube,海外媒体,no-resolve
@@ -260,10 +264,10 @@ rules:
 
   # 币圈
   - RULE-SET,Binance,币安,no-resolve
-  - DOMAIN-SUFFIX,roogoo.com,直接连接,no-resolve
+  - DOMAIN-SUFFIX,roogoo.com,币安,no-resolve
+  - DOMAIN-SUFFIX,ether.fi,泰国节点,no-resolve
 
   # 指定应用
-  - RULE-SET,Google,其它流量,no-resolve
   - RULE-SET,NPMjs,中转代理,no-resolve
   - RULE-SET,Whatsapp,IM-WhatsApp,no-resolve
   - RULE-SET,Telegram,IM-Telegram,no-resolve

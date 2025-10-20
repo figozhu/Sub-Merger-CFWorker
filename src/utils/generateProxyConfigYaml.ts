@@ -49,6 +49,8 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   otherNodes = filterNodes(otherNodes, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
   let proxyNodes = filterNodes(allowNodes, envConfig.PROXY_MATCH_PATTERN || '', false);
   proxyNodes = filterNodes(proxyNodes, envConfig.PROXY_EXCLUDE_PATTERN || '', true);
+  let exitNodes = filterNodes(allowNodes, envConfig.EXIT_MATCH_PATTERN || '', false);
+  exitNodes = filterNodes(exitNodes, envConfig.EXIT_EXCLUDE_PATTERN || '', true);
   let binanceNodes = filterNodes(allowNodes, envConfig.BINANCE_MATCH_PATTERN || '', false);
   binanceNodes = filterNodes(binanceNodes, envConfig.BINANCE_EXCLUDE_PATTERN || '', true);
   let mediaNodes = filterNodes(totalAndSelfNodes, envConfig.MEDIA_MATCH_PATTERN || '', false);
@@ -75,6 +77,8 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   otherNodesForStash = filterNodes(otherNodesForStash, envConfig.OTHER_EXCLUDE_PATTERN || '', true);
   let proxyNodesForStash = filterNodes(allowNodesForStash, envConfig.PROXY_MATCH_PATTERN || '', false);
   proxyNodesForStash = filterNodes(proxyNodesForStash, envConfig.PROXY_EXCLUDE_PATTERN || '', true);
+  let exitNodesForStash = filterNodes(allowNodesForStash, envConfig.EXIT_MATCH_PATTERN || '', false);
+  exitNodesForStash = filterNodes(exitNodesForStash, envConfig.EXIT_EXCLUDE_PATTERN || '', true);
   let binanceNodesForStash = filterNodes(allowNodesForStash, envConfig.BINANCE_MATCH_PATTERN || '', false);
   binanceNodesForStash = filterNodes(binanceNodesForStash, envConfig.BINANCE_EXCLUDE_PATTERN || '', true);
   let mediaNodesForStash = filterNodes(totalAndSelfNodes, envConfig.MEDIA_MATCH_PATTERN || '', false);
@@ -109,6 +113,11 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
         proxies: uniqueNodesArr(proxyNodes.map((node: any) => node.name)),
     },
     {
+        name: '落地节点',
+        type: 'select',
+        proxies: uniqueNodesArr(exitNodes.map((node: any) => node.name)),
+    },
+    {
       name: 'IM-Telegram',
       type: 'select',
       proxies: uniqueNodesArr(telegramNodes.map((node: any) => node.name)),
@@ -125,8 +134,8 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     },
     {
       name: '海外AI',
-      type: 'select',
-      proxies: uniqueNodesArr(mediaNodes.map((node: any) => node.name)),
+      type: 'relay',
+      proxies: ["中转代理", "落地节点"],
     },
     {
       name: '海外媒体',
@@ -192,6 +201,11 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
         proxies: uniqueNodesArr(proxyNodesForStash.map((node: any) => node.name)),
     },
     {
+        name: '落地节点',
+        type: 'select',
+        proxies: uniqueNodesArr(exitNodesForStash.map((node: any) => node.name)),
+    },
+    {
       name: 'IM-Telegram',
       type: 'select',
       proxies: uniqueNodesArr(telegramNodesForStash.map((node: any) => node.name)),
@@ -208,8 +222,8 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     },
     {
       name: '海外AI',
-      type: 'select',
-      proxies: uniqueNodesArr(mediaNodesForStash.map((node: any) => node.name)),
+      type: 'relay',
+      proxies: ["中转代理", "落地节点"],
     },
     {
         name: '海外媒体',
