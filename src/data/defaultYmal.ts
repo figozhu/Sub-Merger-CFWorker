@@ -4,6 +4,7 @@ const defaultYamlString = `
 ## 自定义Clash配置 
 #---------------------------------------------------#
 
+
 mixed-port: 7890
 allow-lan: false
 mode: Rule
@@ -214,8 +215,10 @@ rules:
   - DOMAIN-SUFFIX,fastly.jsdelivr.net,直接连接,no-resolve
 
   # 服务器
+  # 新加坡aws
   - IP-CIDR,13.229.0.0/16,DIRECT,no-resolve
   - IP-CIDR,122.248.0.0/16,DIRECT,no-resolve
+
   - IP-CIDR,23.185.168.0/24,DIRECT,no-resolve
   - IP-CIDR,38.78.145.0/24,DIRECT,no-resolve
   - IP-CIDR,216.151.168.0/24,DIRECT,no-resolve
@@ -230,6 +233,9 @@ rules:
   - RULE-SET,Anthropic,海外AI,no-resolve
   - RULE-SET,Claude,海外AI,no-resolve
   - RULE-SET,Google,海外AI,no-resolve
+
+  # 美国大学
+  - DOMAIN-SUFFIX,maricopa.edu,海外AI,no-resolve
 
   # 媒体（YouTube、Twitter）
   - RULE-SET,Youtube,海外媒体,no-resolve
@@ -250,6 +256,8 @@ rules:
   - DOMAIN-SUFFIX,api2d.net,直接连接,no-resolve
   - DOMAIN-SUFFIX,appstorrent.ru,其它流量,no-resolve
   - DOMAIN-SUFFIX,figma.com,直接连接,no-resolve
+  - DOMAIN-SUFFIX,ultramobile.com,海外AI,no-resolve
+
 
   # Apple-Intelligence
   - DOMAIN-SUFFIX,apple-relay.apple.com,其它流量,no-resolve
@@ -264,6 +272,17 @@ rules:
 
   # 币圈
   - RULE-SET,Binance,币安,no-resolve
+  - DOMAIN-SUFFIX,bybit.com,币安,no-resolve
+  - DOMAIN-SUFFIX,byd3c3.com,币安,no-resolve
+  - DOMAIN-SUFFIX,byddc6.com,币安,no-resolve
+  - DOMAIN-SUFFIX,byabcde.com,币安,no-resolve
+  - DOMAIN-SUFFIX,byapps.net,币安,no-resolve
+  - DOMAIN-SUFFIX,bybit.biz,币安,no-resolve
+  - DOMAIN-SUFFIX,byd3c3.com,币安,no-resolve
+  - DOMAIN-SUFFIX,bitget.com,币安,no-resolve
+  - DOMAIN-SUFFIX,bitgetapps.com,币安,no-resolve
+  - DOMAIN-SUFFIX,bitgetapp.com,币安,no-resolve
+  - DOMAIN-SUFFIX,abcdstable.com,币安,no-resolve
   - DOMAIN-SUFFIX,roogoo.com,币安,no-resolve
   - DOMAIN-SUFFIX,ether.fi,泰国节点,no-resolve
 
@@ -288,7 +307,7 @@ rules:
   # PokerClient
   - PROCESS-NAME,GGnet.exe,PokerClient
   - PROCESS-NAME,PokerStars.exe,PokerClient
-  - DOMAIN-SUFFIX,gtowizard.com,DIRECT,no-resolve
+  - DOMAIN-SUFFIX,app.gtowizard.com,DIRECT,no-resolve
   - DOMAIN-KEYWORD,gtowizard-org-,DIRECT,no-resolve
 
   # 雀魂
