@@ -101,7 +101,7 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     {
         name: '其它流量',
         type: 'select',
-        proxies: selfNodes.length > 0 ? ['自建节点', '海外AI', '机场节点'] : uniqueNodesArr(otherNodes.map((node: any) => node.name)),
+        proxies: selfNodes.length > 0 ? ['中转代理', '海外AI'] : uniqueNodesArr(otherNodes.map((node: any) => node.name)),
     },
     {
         name: '中转代理',
@@ -116,17 +116,17 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     {
       name: 'IM-Telegram',
       type: 'select',
-      proxies: uniqueNodesArr(telegramNodes.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(['其它流量', ...telegramNodes.map((node: any) => node.name)]),
     },
     {
       name: 'IM-WhatsApp',
       type: 'select',
-      proxies: uniqueNodesArr(whatsappNodes.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(['其它流量', ...whatsappNodes.map((node: any) => node.name)]),
     },
     {
       name: '海外媒体',
       type: 'select',
-      proxies: uniqueNodesArr(mediaNodes.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(['其它流量', ...mediaNodes.map((node: any) => node.name)]),
     },
     {
       name: 'PokerClient',
@@ -184,7 +184,7 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     {
       name: '其它流量',
       type: 'select',
-      proxies: selfNodes.length > 0 ? ['自建节点', '海外AI', '机场节点'] : uniqueNodesArr(otherNodesForStash.map((node: any) => node.name)),
+      proxies: selfNodes.length > 0 ? ['中转代理', '海外AI'] : uniqueNodesArr(otherNodesForStash.map((node: any) => node.name)),
     },
     {
         name: '中转代理',
@@ -199,17 +199,17 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     {
       name: 'IM-Telegram',
       type: 'select',
-      proxies: uniqueNodesArr(telegramNodesForStash.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(['其它流量', ...telegramNodesForStash.map((node: any) => node.name)]),
     },
     {
       name: 'IM-WhatsApp',
       type: 'select',
-      proxies: uniqueNodesArr(whatsappNodesForStash.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(['其它流量', ...whatsappNodesForStash.map((node: any) => node.name)]),
     },
     {
         name: '海外媒体',
         type: 'select',
-        proxies: uniqueNodesArr(mediaNodes.map((node: any) => node.name)),
+        proxies: uniqueNodesArr(['其它流量', ...mediaNodes.map((node: any) => node.name)]),
     },
     {
       name: 'PokerClient',
