@@ -65,8 +65,8 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   steamNodes = filterNodes(steamNodes, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
   let pokerNodes = filterNodes(allowNodes, envConfig.POKER_MATCH_PATTERN || '', false);
   pokerNodes = filterNodes(pokerNodes, envConfig.POKER_EXCLUDE_PATTERN || '', true);
-  let taiguoNodes = filterNodes(totalAndSelfNodes, envConfig.TAIGUO_MATCH_PATTERN || '', false);
-  taiguoNodes = filterNodes(taiguoNodes, envConfig.TAIGUO_EXCLUDE_PATTERN || '', true);
+  let etherfiNodes = filterNodes(totalAndSelfNodes, envConfig.ETHERFI_MATCH_PATTERN || '', false);
+  etherfiNodes = filterNodes(etherfiNodes, envConfig.ETHERFI_EXCLUDE_PATTERN || '', true);
   let fallbackNodes = filterNodes(allowNodes, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodes = filterNodes(fallbackNodes, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
@@ -91,8 +91,8 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   steamNodesForStash = filterNodes(steamNodesForStash, envConfig.STEAM_EXCLUDE_PATTERN || '', true);
   let pokerNodesForStash = filterNodes(allowNodesForStash, envConfig.POKER_MATCH_PATTERN || '', false);
   pokerNodesForStash = filterNodes(pokerNodesForStash, envConfig.POKER_EXCLUDE_PATTERN || '', true);
-  let taiguoNodesForStash = filterNodes(totalAndSelfNodes, envConfig.TAIGUO_MATCH_PATTERN || '', false);
-  taiguoNodesForStash = filterNodes(taiguoNodesForStash, envConfig.TAIGUO_EXCLUDE_PATTERN || '', true);
+  let etherfiNodesForStash = filterNodes(totalAndSelfNodes, envConfig.ETHERFI_MATCH_PATTERN || '', false);
+  etherfiNodesForStash = filterNodes(etherfiNodesForStash, envConfig.ETHERFI_EXCLUDE_PATTERN || '', true);
   let fallbackNodesForStash = filterNodes(allowNodesForStash, envConfig.FALLBACK_MATCH_PATTERN || '', false);
   fallbackNodesForStash = filterNodes(fallbackNodesForStash, envConfig.FALLBACK_EXCLUDE_PATTERN || '', true);
 
@@ -139,9 +139,9 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       proxies: uniqueNodesArr(binanceNodes.map((node: any) => node.name)),
     },
     {
-      name: '泰国节点',
+      name: 'EtherFi',
       type: 'select',
-      proxies: uniqueNodesArr(taiguoNodes.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(etherfiNodes.map((node: any) => node.name)),
     },
     {
       name: 'GameSteam',
@@ -222,9 +222,9 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
       proxies: uniqueNodesArr(binanceNodesForStash.map((node: any) => node.name)),
     },
     {
-      name: '泰国节点',
+      name: 'EtherFi',
       type: 'select',
-      proxies: uniqueNodesArr(taiguoNodesForStash.map((node: any) => node.name)),
+      proxies: uniqueNodesArr(etherfiNodesForStash.map((node: any) => node.name)),
     },
     {
       name: 'GameSteam',
