@@ -63,12 +63,6 @@ dns:
 
 # MARK: 规则集
 rule-providers:
-  reject:
-    type: http
-    behavior: classical
-    url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/AdvertisingLite/AdvertisingLite_Classical.yaml"
-    path: ./RuleSet/reject.yaml
-    interval: 86400
   OpenAI:
     type: http
     behavior: classical
@@ -216,16 +210,20 @@ rules:
 
   # 服务器
   # 新加坡aws
-  - IP-CIDR,13.229.0.0/16,DIRECT,no-resolve
-  - IP-CIDR,122.248.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,13.229.203.0/16,DIRECT,no-resolve
+  - IP-CIDR,13.229.232.0/16,DIRECT,no-resolve
+  - IP-CIDR,122.248.212.0/16,DIRECT,no-resolve
 
   - IP-CIDR,23.185.168.0/24,DIRECT,no-resolve
   - IP-CIDR,38.78.145.0/24,DIRECT,no-resolve
   - IP-CIDR,216.151.168.0/24,DIRECT,no-resolve
-  - IP-CIDR,45.152.240.0/24,DIRECT,no-resolve
   - IP-CIDR,113.192.61.0/24,DIRECT,no-resolv
   - IP-CIDR,66.253.43.0/24,DIRECT,no-resolve
+
+  # vps
+  - IP-CIDR,45.142.106.0/24,DIRECT,no-resolve
   - IP-CIDR,185.194.54.0/24,DIRECT,no-resolve
+  - IP-CIDR,103.26.8.0/24,DIRECT,no-resolve
 
   # AI(OpenAI, Anthropic/Claude, Gemini)
   - RULE-SET,OpenAI,海外AI,no-resolve
@@ -244,7 +242,7 @@ rules:
 
   # 规则匹配
   - DOMAIN-SUFFIX,chzhshch.org,直接连接,no-resolve
-  - DOMAIN-SUFFIX,figozhu.xyz,直接连接,no-resolve
+  - DOMAIN-SUFFIX,figozhu.com,直接连接,no-resolve
   - DOMAIN-SUFFIX,tu-zi.com,直接连接,no-resolve
   - DOMAIN-SUFFIX,one.api4gpt.com,直接连接,no-resolve
   - DOMAIN-SUFFIX,anyrouter.top,直接连接,no-resolve
@@ -284,7 +282,12 @@ rules:
   - DOMAIN-SUFFIX,bitgetapp.com,币安,no-resolve
   - DOMAIN-SUFFIX,abcdstable.com,币安,no-resolve
   - DOMAIN-SUFFIX,roogoo.com,币安,no-resolve
-  - DOMAIN-SUFFIX,ether.fi,泰国节点,no-resolve
+  - DOMAIN-SUFFIX,bitkeep.fun,币安,no-resolve
+  - DOMAIN-SUFFIX,bitkeep.com,币安,no-resolve
+
+
+  # ether.fi
+  - DOMAIN-SUFFIX,ether.fi,EtherFi,no-resolve
 
   # 指定应用
   - RULE-SET,NPMjs,中转代理,no-resolve
@@ -366,7 +369,6 @@ rules:
   - DOMAIN,clash.razord.top,DIRECT,no-resolve
   - DOMAIN,yacd.haishan.me,DIRECT,no-resolve
   - RULE-SET,private,DIRECT,no-resolve
-  - RULE-SET,reject,REJECT,no-resolve
   - RULE-SET,direct,DIRECT,no-resolve
 
   # EMBY公益服
