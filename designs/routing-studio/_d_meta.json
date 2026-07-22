@@ -1,0 +1,18 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "SubMerger 路由工作室交互原型": {
+      "versions": [
+        {
+          "path": "routing-studio-prototype.html",
+          "createdAt": "2026-07-22T06:37:51.509Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-07-22T06:37:51.509Z",
+  "updatedAt": "2026-07-22T07:00:24.154Z"
+}

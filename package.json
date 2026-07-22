@@ -2,7 +2,13 @@
   "name": "sub-merger",
   "scripts": {
     "dev": "wrangler dev src/index.tsx --test-scheduled",
-    "deploy": "wrangler deploy --minify src/index.tsx"
+    "deploy": "wrangler deploy --minify src/index.tsx",
+    "build": "wrangler deploy src/index.tsx --dry-run --outdir dist --name sub-merger --compatibility-date 2024-08-26 --compatibility-flags nodejs_compat",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:api": "vitest run test/integration",
+    "test:compat": "vitest run test/compat"
   },
   "dependencies": {
     "dayjs": "^1.11.13",
@@ -10,7 +16,10 @@
     "yaml": "^2.5.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260515.1",
-    "wrangler": "^4.92.0"
+    "@cloudflare/workers-types": "^5.20260721.1",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.113.0"
   }
 }

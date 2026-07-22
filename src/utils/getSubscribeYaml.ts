@@ -1,15 +1,13 @@
 import { sendBarkNotification } from '../notify/bark';
 import { getProxyNodesFromYaml } from './getProxyNodeFromyaml'
+import type { SubUserInfo } from '../types/types'
 
-function printAllHeaders(response: Response) {
-  console.log("响应头:");
-  for (const [key, value] of response.headers.entries()) {
-    console.log(`${key}: ${value}`);
-  }
-}
-
+/**
+ * 解析订阅响应中的流量信息头。
+ * @param header `subscription-userinfo` 响应头；缺失时使用安全默认值。
+ * @returns 规范化的上传、下载、总量和到期时间。
+ */
 function parseSubscriptionUserInfo(header: string | null): SubUserInfo {
-    console.debug("parseSubscriptionUserInfo", "header=", header)
     const defaultInfo = {
         upload: 0,
         download: 0,
@@ -51,7 +49,12 @@ function generateSubscriptionUserInfoString(userInfo: SubUserInfo): string {
   return parts.join('; ');
 }
 
-
+/**
+ * 将一个订阅源的流量信息累加到汇总对象。
+ * @param totalUserInfo 可变的汇总对象。
+ * @param newUserInfo 新订阅源的流量信息。
+ * @returns 无返回值；函数直接更新汇总对象。
+ */
 function updateTotalUserInfo(totalUserInfo: SubUserInfo, newUserInfo: SubUserInfo) {
     totalUserInfo.upload += newUserInfo.upload
     totalUserInfo.download += newUserInfo.download
@@ -59,10 +62,16 @@ function updateTotalUserInfo(totalUserInfo: SubUserInfo, newUserInfo: SubUserInf
     totalUserInfo.expire = Math.min(totalUserInfo.expire, newUserInfo.expire)
 }
 
+/**
+ * 并发拉取并解析同一类型的全部订阅源。
+ * 日志仅记录订阅名称与状态，不输出完整订阅 URL、节点密钥或 Bark OpenID。
+ * @param subArr 已保存的订阅源数组。
+ * @param envConfig Worker 运行环境与请求 User-Agent 配置。
+ * @returns 流量汇总与扁平化节点数组。
+ */
 async function getSubscribeYaml(subArr: any[], envConfig: any): Promise<any[]> {
     const userAgent = envConfig.UA
     const barkOpenid = envConfig.NOTIFICATION?.BARK_OPENID
-    console.debug("getSubscribeYaml", "订阅源数量=", subArr.length, "使用的UA=", userAgent, "Bark OpenID=", barkOpenid)
     
     const headers = {
         accept: '*/*',
@@ -89,16 +98,16 @@ async function getSubscribeYaml(subArr: any[], envConfig: any): Promise<any[]> {
                 const tmpSubUserInfo = parseSubscriptionUserInfo(response.headers.get('subscription-userinfo'))
                 updateTotalUserInfo(subUserInfo, tmpSubUserInfo)
                 const yamlContent = await response.text();
-                console.debug(`getSubscribeYaml: 获取订阅源信息成功，订阅源名称：${oneSub.subName}`)
                 return getProxyNodesFromYaml(yamlContent, oneSub.subName);
             } else {
-                console.error(`getSubscribeYaml: 请求失败: Name: ${oneSub.subName}, URL: ${oneSub.subUrl}, 状态码: ${response.status}`);
+                console.error(`getSubscribeYaml: 请求失败: Name: ${oneSub.subName}, 状态码: ${response.status}`);
                 sendBarkNotification(barkOpenid, 'CF-Sub-Merger: 订阅源更新失败', `订阅源名称：${oneSub.subName}，HTTP响应状态码：${response.status}`)
                 return [];
             }
         } catch (error) {
-            console.error(`getSubscribeYaml: 获取订阅内容时发生异常: Name: ${oneSub.subName}, URL: ${oneSub.subUrl}`, error);
-            sendBarkNotification(barkOpenid, 'CF-Sub-Merger: 订阅源更新失败', `订阅源名称：${oneSub.subName}，错误信息：${error}`)
+            console.error(`getSubscribeYaml: 获取订阅内容时发生异常: Name: ${oneSub.subName}`);
+            // 外部异常可能包含带凭据的订阅地址，因此通知只发送可公开的订阅名称。
+            sendBarkNotification(barkOpenid, 'CF-Sub-Merger: 订阅源更新失败', `订阅源名称：${oneSub.subName}，订阅源请求异常`)
             return [];
         }
     });
