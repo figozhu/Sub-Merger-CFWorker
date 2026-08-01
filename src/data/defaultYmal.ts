@@ -10,6 +10,13 @@ allow-lan: false
 mode: Rule
 log-level: info
 external-controller: 127.0.0.1:60000
+hosts:
+  'llm-api.dev.aceguardian.io':
+    - 47.130.42.21
+    - 3.0.226.242
+  'chat.dev.aceguardian.io':
+    - 47.130.42.21
+    - 3.0.226.242
 dns:
   enable: true
   listen: ':53'
@@ -153,6 +160,12 @@ rule-providers:
     url: "https://fastly.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Whatsapp/Whatsapp.yaml"
     path: ./RuleSet/Whatsapp.yaml
     interval: 86400
+  LinkedIn:
+    type: http
+    behavior: classical
+    url: "https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/LinkedIn/LinkedIn.yaml"
+    path: ./RuleSet/LinkedIn.yaml
+    interval: 86400
   proxy:
     type: http
     behavior: domain
@@ -214,31 +227,59 @@ rules:
   - IP-CIDR,13.229.232.0/16,DIRECT,no-resolve
   - IP-CIDR,122.248.212.0/16,DIRECT,no-resolve
 
-  - IP-CIDR,23.185.168.0/24,DIRECT,no-resolve
-  - IP-CIDR,38.78.145.0/24,DIRECT,no-resolve
-  - IP-CIDR,216.151.168.0/24,DIRECT,no-resolve
-  - IP-CIDR,113.192.61.0/24,DIRECT,no-resolv
-  - IP-CIDR,66.253.43.0/24,DIRECT,no-resolve
-
   # vps
-  - IP-CIDR,45.142.106.0/24,DIRECT,no-resolve
+  # v.ps
   - IP-CIDR,185.194.54.0/24,DIRECT,no-resolve
+  # GoMAMi
   - IP-CIDR,103.26.8.0/24,DIRECT,no-resolve
+  # Fourplex
+  - IP-CIDR,147.90.234.0/24,DIRECT,no-resolve
+  # Lamhosting
+  - IP-CIDR,167.253.155.0/24,DIRECT,no-resolve
+  # Google-SG
+  - IP-CIDR,34.124.238.0/24,DIRECT,no-resolve
+  # Google-JP
+  - IP-CIDR,34.146.23.0/24,DIRECT,no-resolve
+  # Evoxt-MY
+  - IP-CIDR,136.0.110.0/24,DIRECT,no-resolve
+
+  # 公司域名
+  - DOMAIN-SUFFIX,zenithstrat.com,DIRECT,no-resolve
+
+  # Tailscale
+  - IP-CIDR,100.85.0.0/16,ZS-Tailscale【自建】,no-resolve
+  - DOMAIN-SUFFIX,onca-mountain.ts.net,ZS-Tailscale【自建】,no-resolve
+
+  # 免费NAT
+  - DOMAIN-SUFFIX,freecloud.ltd,EMBY,no-resolve
+
+  # zoho
+  - DOMAIN-SUFFIX,zoho.com,DIRECT,no-resolve
+  - DOMAIN-SUFFIX,zoho.in,DIRECT,no-resolve
+
+  # 媒体（YouTube）
+  - RULE-SET,Youtube,海外媒体,no-resolve
+  - DOMAIN-SUFFIX,googlevideo.com,海外媒体,no-resolve
 
   # AI(OpenAI, Anthropic/Claude, Gemini)
   - RULE-SET,OpenAI,海外AI,no-resolve
+  - PROCESS-NAME-WILDCARD,Codex*,海外AI,no-resolve
   - RULE-SET,Gemini,海外AI,no-resolve
   - RULE-SET,Anthropic,海外AI,no-resolve
   - RULE-SET,Claude,海外AI,no-resolve
   - RULE-SET,Google,海外AI,no-resolve
 
-  # 美国大学
-  - DOMAIN-SUFFIX,maricopa.edu,海外AI,no-resolve
+  # Rokid AI
+  - DOMAIN-SUFFIX,ai-cloud-global.rokid.com,海外AI,no-resolve
 
-  # 媒体（YouTube、Twitter）
-  - RULE-SET,Youtube,海外媒体,no-resolve
+  # starryblu
+  - DOMAIN-SUFFIX,starryblu.com,DIRECT,no-resolve
+
+  # 媒体（Twitter）
   - RULE-SET,Twitter,海外媒体,no-resolve
 
+  # 美国大学
+  - DOMAIN-SUFFIX,maricopa.edu,海外AI,no-resolve
 
   # 规则匹配
   - DOMAIN-SUFFIX,chzhshch.org,直接连接,no-resolve
@@ -270,21 +311,33 @@ rules:
 
   # 币圈
   - RULE-SET,Binance,币安,no-resolve
+  - DOMAIN-SUFFIX,roogoo.com,币安,no-resolve
+ 
   - DOMAIN-SUFFIX,bybit.com,币安,no-resolve
+  - DOMAIN-SUFFIX,bybitglobal.com,币安,no-resolve
+  - DOMAIN-SUFFIX,byabcde.com,币安,no-resolve
   - DOMAIN-SUFFIX,byd3c3.com,币安,no-resolve
   - DOMAIN-SUFFIX,byddc6.com,币安,no-resolve
+  - DOMAIN-SUFFIX,bybdc6.com,币安,no-resolve
   - DOMAIN-SUFFIX,byabcde.com,币安,no-resolve
   - DOMAIN-SUFFIX,byapps.net,币安,no-resolve
   - DOMAIN-SUFFIX,bybit.biz,币安,no-resolve
   - DOMAIN-SUFFIX,byd3c3.com,币安,no-resolve
+
   - DOMAIN-SUFFIX,bitget.com,币安,no-resolve
   - DOMAIN-SUFFIX,bitgetapps.com,币安,no-resolve
   - DOMAIN-SUFFIX,bitgetapp.com,币安,no-resolve
   - DOMAIN-SUFFIX,abcdstable.com,币安,no-resolve
-  - DOMAIN-SUFFIX,roogoo.com,币安,no-resolve
   - DOMAIN-SUFFIX,bitkeep.fun,币安,no-resolve
+  - DOMAIN-SUFFIX,bitkeep.life,币安,no-resolve
+  - DOMAIN-SUFFIX,bitkeep.top,币安,no-resolve
+  - DOMAIN-SUFFIX,bitkeep.app,币安,no-resolve
   - DOMAIN-SUFFIX,bitkeep.com,币安,no-resolve
-
+  - DOMAIN-SUFFIX,bitkeep.vip,币安,no-resolve
+  - DOMAIN-SUFFIX,bwb.online,币安,no-resolve
+  - DOMAIN-SUFFIX,bitapi.vip,币安,no-resolve
+  - DOMAIN-SUFFIX,bgstatic.com,币安,no-resolve
+  - DOMAIN-SUFFIX,krbitget.com,币安,no-resolve
 
   # ether.fi
   - DOMAIN-SUFFIX,ether.fi,EtherFi,no-resolve
@@ -295,6 +348,7 @@ rules:
   - RULE-SET,Telegram,IM-Telegram,no-resolve
   - RULE-SET,SteamCN,直接连接,no-resolve
   - RULE-SET,Steam,GameSteam,no-resolve
+  - RULE-SET,LinkedIn,其它流量,no-resolve
 
   # 进程
   

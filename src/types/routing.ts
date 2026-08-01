@@ -124,11 +124,15 @@ export type RoutingRuleType =
   | 'IP-CIDR'
   | 'RULE-SET'
   | 'PROCESS-NAME'
+  | 'PROCESS-NAME-WILDCARD'
   | 'GEOIP'
   | 'MATCH'
 
 /** 兼容旧配置中直接作为规则目标使用的 Clash 内置策略。 */
 export type BuiltinRuleTarget = 'builtin:DIRECT' | 'builtin:REJECT'
+
+/** 迁移旧 YAML 时保留的直接节点目标；前缀用于和策略组稳定 ID 明确区分。 */
+export type LegacyRuleTarget = `legacy-target:${string}`
 
 /** 按数组顺序生成的结构化路由规则。 */
 export interface RoutingRuleConfig {
@@ -147,8 +151,8 @@ export interface RoutingRuleConfig {
   value?: string
   /** RULE-SET 对应规则提供者的稳定 ID。 */
   providerId?: string
-  /** 策略组稳定 ID，或兼容旧规则的内置目标。 */
-  targetGroupId: string | BuiltinRuleTarget
+  /** 策略组稳定 ID、内置目标，或迁移时原样保留的直接节点目标。 */
+  targetGroupId: string | BuiltinRuleTarget | LegacyRuleTarget
   noResolve: boolean
   /** 迁移旧配置时保留无法归一化但必须语义兼容的尾部选项。 */
   legacyOptions?: string[]

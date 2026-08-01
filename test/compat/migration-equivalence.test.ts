@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import YAML from 'yaml'
 import generateLegacyProxyConfigYaml from '../../src/utils/generateProxyConfigYaml'
 import { generateRoutingYamlVariants } from '../../src/utils/generateRoutingYaml'
-import { createLegacyRoutingConfig } from '../../src/config/routingMigration'
+import { createLegacyProxyGroups, createLegacyRoutingConfig } from '../../src/config/routingMigration'
 import { getDefaultYamlString } from '../../src/data/defaultYmal'
 import { getSelfNodeData } from '../../src/data/selfNodeData'
 import { validateRoutingConfig } from '../../src/utils/validateRoutingConfig'
@@ -35,6 +35,47 @@ function parsed(yaml: string): unknown {
 }
 
 describe('旧配置迁移语义兼容', () => {
+  it('兼容旧模板中的 EXIT 和 TAIGUO 正则变量名', () => {
+    const env = createTestEnv()
+    ;[env.SUBSCRIBE_PATTERN, env.ONETIME_PATTERN].forEach((patterns) => {
+      delete patterns.AI_MATCH_PATTERN
+      delete patterns.AI_EXCLUDE_PATTERN
+      delete patterns.ETHERFI_MATCH_PATTERN
+      delete patterns.ETHERFI_EXCLUDE_PATTERN
+      patterns.EXIT_MATCH_PATTERN = 'OLD-AI'
+      patterns.EXIT_EXCLUDE_PATTERN = 'SKIP-AI'
+      patterns.TAIGUO_MATCH_PATTERN = 'OLD-TH'
+      patterns.TAIGUO_EXCLUDE_PATTERN = 'SKIP-TH'
+    })
+
+    const groups = createLegacyProxyGroups(env)
+    const aiSource = groups.find((group) => group.name === '海外AI')?.sources[0]
+    const etherFiSource = groups.find((group) => group.name === 'EtherFi')?.sources[0]
+    expect(aiSource).toMatchObject({ kind: 'filter', include: 'OLD-AI', exclude: 'SKIP-AI' })
+    expect(etherFiSource).toMatchObject({ kind: 'filter', include: 'OLD-TH', exclude: 'SKIP-TH' })
+  })
+
+  it('把历史“泰国节点”策略组目标迁移到重命名后的 EtherFi', () => {
+    const env = createTestEnv()
+    configurePatterns(env)
+    const migration = createLegacyRoutingConfig(`
+rules:
+  - DOMAIN-SUFFIX,ether.fi,泰国节点,no-resolve
+  - MATCH,其它流量
+`, env)
+
+    expect(migration.errors).toEqual([])
+    const etherFiGroup = migration.config?.groups.find((group) => group.name === 'EtherFi')
+    expect(migration.config?.rules[0].targetGroupId).toBe(etherFiGroup?.id)
+    expect(validateRoutingConfig(migration.config).errors).toEqual([])
+
+    const generated = generateRoutingYamlVariants(migration.config!, [], [], 'monthly', '').normalYaml
+    expect(YAML.parse(generated).rules).toEqual([
+      'DOMAIN-SUFFIX,ether.fi,EtherFi,no-resolve',
+      'MATCH,其它流量',
+    ])
+  })
+
   it('默认旧配置可以生成可发布的 schemaVersion=1 草稿', () => {
     const env = createTestEnv()
     configurePatterns(env)

@@ -18,7 +18,8 @@ export const consoleStyles = String.raw`
   --surface-raised: #fbfcfe;
   --ink: #182033;
   --ink-secondary: #4d596f;
-  --ink-muted: #8490a5;
+  /* 辅助文字仍需在白色与浅灰表面保持足够对比度。 */
+  --ink-muted: #66738a;
   --line: #dfe4ed;
   --line-soft: #edf0f5;
   --brand: #3f63df;
@@ -986,7 +987,8 @@ textarea.code-input {
 }
 
 .subscription-table th:last-child {
-  width: 56px;
+  /* 操作列需要同时容纳删除按钮和表格单元格的左右留白。 */
+  width: 72px;
 }
 
 .data-table td {
@@ -998,6 +1000,15 @@ textarea.code-input {
 
 .data-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+/* 多行数据使用轻量斑马纹，横向扫读时更容易保持在同一行。 */
+.data-table tbody tr:nth-child(even) {
+  background: #f8f9fc;
+}
+
+.data-table tbody tr:hover {
+  background: #f2f5fb;
 }
 
 .data-table tbody tr.row-invalid {
@@ -1036,6 +1047,11 @@ textarea.code-input {
   left: 14px;
 }
 
+.subscription-table .icon-button {
+  height: 38px;
+  min-height: 38px;
+}
+
 .output-list {
   display: flex;
   flex-direction: column;
@@ -1051,6 +1067,14 @@ textarea.code-input {
   border-bottom: 1px solid var(--line-soft);
 }
 
+.output-row:nth-child(even) {
+  background: #f8f9fc;
+}
+
+.output-row:hover {
+  background: #f2f5fb;
+}
+
 .output-row:last-child {
   border-bottom: 0;
 }
@@ -1062,22 +1086,19 @@ textarea.code-input {
   gap: 10px;
 }
 
-.output-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--brand-soft);
-  color: var(--brand);
-}
-
 .output-type > div {
   display: flex;
   min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 2px;
+}
+
+.output-type strong,
+.output-type span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .output-type strong {
@@ -1146,31 +1167,43 @@ textarea.code-input {
 }
 
 .parsed-node-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
   min-width: 0;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   padding: 10px 9px;
   border-bottom: 1px solid var(--line-soft);
 }
 
+.parsed-node-row:nth-child(even) {
+  background: #f8f9fc;
+}
+
+.parsed-node-row:hover {
+  background: #f2f5fb;
+}
+
 .node-protocol {
   display: grid;
-  width: 42px;
+  width: 100%;
+  min-width: 0;
   height: 27px;
-  flex: 0 0 auto;
   place-items: center;
+  padding: 0 6px;
   border-radius: 6px;
   background: var(--brand-soft);
   color: var(--brand-strong);
   font-family: var(--font-mono);
   font-size: 8px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .parsed-node-row > div {
   display: flex;
   min-width: 0;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 2px;
 }
@@ -1207,6 +1240,19 @@ textarea.code-input {
   color: #7e8aa0;
   font-family: var(--font-mono);
   font-size: 8px;
+}
+
+.code-toolbar > span,
+.template-editor-toolbar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-toolbar > span:last-child,
+.template-editor-toolbar > span:last-child {
+  flex: 0 0 auto;
 }
 
 .code-editor-grid {
@@ -1370,6 +1416,7 @@ textarea.code-input {
 .provider-list,
 .category-list,
 .yaml-outline-list,
+.outline-list,
 .issue-list {
   min-height: 0;
   overflow-y: auto;
@@ -1420,7 +1467,8 @@ textarea.code-input {
 .entity-row,
 .provider-row,
 .category-row,
-.yaml-outline-list button {
+.yaml-outline-list button,
+.outline-list button {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -1437,14 +1485,23 @@ textarea.code-input {
 .entity-list,
 .provider-list,
 .category-list,
-.yaml-outline-list {
+.yaml-outline-list,
+.outline-list {
   padding: 4px 7px 8px;
+}
+
+/* 长列表同样保持奇偶行节奏，选中态会在下方规则中覆盖此背景。 */
+.entity-list > .entity-row:nth-child(even),
+.provider-list > .entity-row:nth-child(even),
+.provider-list > .provider-row:nth-child(even) {
+  background: #f8f9fc;
 }
 
 .entity-row:hover,
 .provider-row:hover,
 .category-row:hover,
-.yaml-outline-list button:hover {
+.yaml-outline-list button:hover,
+.outline-list button:hover {
   background: #f7f8fb;
 }
 
@@ -1452,7 +1509,8 @@ textarea.code-input {
 .entity-row[aria-selected="true"],
 .provider-row.active,
 .category-row.active,
-.yaml-outline-list button.active {
+.yaml-outline-list button.active,
+.outline-list button.active {
   background: var(--brand-soft);
   color: var(--brand-strong);
   box-shadow: inset 0 0 0 1px var(--brand-border);
@@ -1501,7 +1559,7 @@ textarea.code-input {
 .provider-row small,
 .outline-key-copy small {
   overflow: hidden;
-  color: #929cad;
+  color: #68758a;
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1611,15 +1669,34 @@ textarea.code-input {
   background: var(--brand);
 }
 
+.switch-label input:focus-visible + .switch-control,
+.mini-switch input:focus-visible + span {
+  outline: 3px solid rgba(63, 99, 223, 0.2);
+  outline-offset: 2px;
+}
+
 .switch-label input:checked + .switch-control::after,
 .mini-switch input:checked + span::after {
   transform: translateX(13px);
 }
 
-.source-stack {
+.source-stack,
+.source-list {
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+
+.button-cluster {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.source-heading > div:first-child {
+  min-width: 180px;
 }
 
 .source-card {
@@ -1645,6 +1722,13 @@ textarea.code-input {
   background: #f8f9fb;
 }
 
+.source-card-head > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .source-type,
 .source-actions {
   display: flex;
@@ -1655,6 +1739,12 @@ textarea.code-input {
 .source-type {
   color: #425067;
   font-size: 9px;
+}
+
+.source-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .source-type > span {
@@ -1670,6 +1760,7 @@ textarea.code-input {
 .source-fields {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: end;
   gap: 9px;
   padding: 10px;
@@ -1813,6 +1904,78 @@ textarea.code-input {
 .node-chip-list .remaining-node-count {
   color: var(--ink-muted);
   font-family: var(--font-mono);
+}
+
+/* 节点匹配结果使用可换行标签，避免长节点名再次粘连成一整段文字。 */
+.node-preview-list {
+  display: flex;
+  max-height: 220px;
+  min-width: 0;
+  min-height: 46px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  padding: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d0dc transparent;
+}
+
+.node-chip,
+.node-preview-more {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid #dfe4ec;
+  border-radius: 999px;
+  background: #f9fafc;
+  color: #4f5c71;
+  overflow-wrap: anywhere;
+}
+
+.node-chip::before {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+  content: "";
+}
+
+.node-preview-more {
+  border-style: dashed;
+  background: #ffffff;
+  color: var(--ink-muted);
+}
+
+.preview-count {
+  display: inline-flex;
+  min-height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.node-preview-empty {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px dashed #d7ddea;
+  border-radius: 9px;
+  background: #fafbfe;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
 }
 
 /* ========================================================================== 
@@ -2004,7 +2167,520 @@ textarea.code-input {
   color: #a2aab8;
 }
 
-/* ========================================================================== 
+/* ==========================================================================
+   10.1 策略组内嵌分流规则
+
+   规则继续以扁平数组保存，但在编辑层级中归属于策略组；用户可以在同一
+   工作区切换“当前策略组”和“全局顺序”，兼顾常规配置效率与最终顺序校验。
+   ========================================================================== */
+.unified-group-list {
+  min-width: 0;
+}
+
+.unified-group-row {
+  gap: 7px;
+}
+
+.group-row-select {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.unified-group-row .row-order-actions {
+  flex-direction: column;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.unified-group-row:hover .row-order-actions,
+.unified-group-row.active .row-order-actions,
+.unified-group-row:focus-within .row-order-actions {
+  opacity: 1;
+}
+
+.group-rule-badge {
+  display: inline-flex;
+  min-width: 42px;
+  min-height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.group-rule-badge.empty {
+  background: #f1f3f6;
+  color: #929bac;
+}
+
+.unified-group-editor {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.unified-editor-header {
+  min-height: 68px;
+}
+
+.unified-editor-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.unified-editor-header h2 {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unified-group-context {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+  padding: 14px 16px 15px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcff;
+}
+
+.group-pane-tabs {
+  display: flex;
+  min-height: 48px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.group-pane-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-width: 142px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: #68758a;
+  font-size: var(--text-md);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.group-pane-tabs button::after {
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  background: transparent;
+  content: "";
+}
+
+.group-pane-tabs button.active {
+  color: var(--brand-strong);
+}
+
+.group-pane-tabs button.active::after {
+  background: var(--brand);
+}
+
+.group-pane-tabs button span {
+  display: inline-grid;
+  min-width: 22px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #727d90;
+  font-size: var(--text-xs);
+}
+
+.group-pane-tabs button.active span {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.unified-editor-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  background: #f7f8fb;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d0dc transparent;
+}
+
+.nested-group-settings {
+  min-height: 100%;
+  background: #ffffff;
+}
+
+.nested-rules-panel {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 11px;
+  padding: 16px;
+}
+
+.nested-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nested-section-heading h3 {
+  margin: 0;
+  color: #2f3a50;
+  font-size: var(--text-lg);
+}
+
+.nested-section-heading p,
+.nested-group-settings .section-heading p {
+  margin: 3px 0 0;
+  color: #7f899b;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.nested-rule-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nested-rule-scope {
+  flex: 0 0 auto;
+}
+
+.nested-rule-scope button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nested-rule-scope button span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 18px;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: var(--text-xs);
+}
+
+.nested-rule-search {
+  min-width: 200px;
+  max-width: 310px;
+  flex: 1;
+}
+
+.nested-rule-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #dce1e9;
+  border-radius: 7px;
+  outline: 0;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+
+.nested-rule-search input:focus {
+  border-color: #91a0cd;
+  box-shadow: 0 0 0 3px rgba(78, 94, 158, 0.09);
+}
+
+.selected-rule-toolbar,
+.rule-selection-hint {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d8def0;
+  border-radius: 8px;
+  background: #f1f4ff;
+  color: #59677f;
+}
+
+.selected-rule-toolbar {
+  position: sticky;
+  top: -1px;
+  z-index: 4;
+  justify-content: space-between;
+  padding: 5px 7px 5px 12px;
+  box-shadow: 0 7px 16px rgba(40, 50, 75, 0.06);
+}
+
+.selected-rule-toolbar > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.selected-rule-toolbar > div:first-child span {
+  color: #7c879a;
+  font-size: var(--text-xs);
+}
+
+.selected-rule-toolbar > div:first-child strong {
+  color: var(--brand-strong);
+  font-size: var(--text-sm);
+}
+
+.selected-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.selected-rule-actions button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #56647a;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.selected-rule-actions button:hover:not(:disabled) {
+  background: #ffffff;
+  color: var(--brand-strong);
+}
+
+.selected-rule-actions button.danger {
+  color: var(--danger);
+}
+
+.selected-rule-actions button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.rule-selection-hint {
+  justify-content: center;
+  padding: 0 12px;
+  border-style: dashed;
+  background: #fafbfe;
+  color: #7d8799;
+  font-size: var(--text-sm);
+}
+
+.nested-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nested-rule-record {
+  overflow: hidden;
+  border: 1px solid #dfe3eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 1px rgba(23, 31, 49, 0.02);
+  transition: border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+
+/* 一条规则可能包含主、副两行，因此以整张记录卡交替着色。 */
+.nested-rule-list > .nested-rule-record:nth-of-type(even) {
+  background: #f7f9fd;
+}
+
+.nested-rule-record:hover {
+  background: #f2f5fb;
+  border-color: #cbd3e1;
+  box-shadow: 0 5px 16px rgba(28, 38, 63, 0.06);
+}
+
+.nested-rule-record.selected {
+  background: #f1f4ff;
+  border-color: #8999ce;
+  box-shadow: 0 0 0 2px rgba(78, 94, 158, 0.11), 0 6px 18px rgba(40, 52, 86, 0.08);
+}
+
+.nested-rule-record.disabled {
+  opacity: 0.57;
+}
+
+.nested-rule-primary {
+  display: grid;
+  grid-template-columns: 48px 28px minmax(118px, 0.55fr) minmax(190px, 1.5fr) 48px;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 9px 7px;
+}
+
+.nested-rule-primary.with-target {
+  grid-template-columns: 48px 28px minmax(118px, 0.55fr) minmax(170px, 1.35fr) minmax(130px, 0.7fr) 48px;
+}
+
+.rule-order-button {
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid #d9deea;
+  border-radius: 6px;
+  background: #f7f8fb;
+  color: #68758a;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nested-rule-record.selected .rule-order-button {
+  border-color: #8798d0;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.nested-rule-enable {
+  display: grid;
+  place-items: center;
+}
+
+.nested-rule-enable input,
+.nested-rule-option input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--brand);
+}
+
+.nested-rule-primary select,
+.nested-rule-primary input,
+.nested-rule-secondary input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  outline: 0;
+  background: #ffffff;
+  color: #465369;
+  font-size: var(--text-md);
+}
+
+.nested-rule-primary select:focus,
+.nested-rule-primary input:focus,
+.nested-rule-secondary input:focus {
+  border-color: #8f9dca;
+  box-shadow: 0 0 0 3px rgba(78, 94, 158, 0.08);
+}
+
+.nested-rule-type {
+  font-family: var(--font-mono);
+}
+
+.nested-rule-placeholder {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px dashed #d7dce6;
+  border-radius: 6px;
+  color: #9099a9;
+  font-size: var(--text-sm);
+}
+
+.rule-copy-button {
+  display: grid;
+  min-width: 46px;
+  min-height: 38px;
+  place-items: center;
+  padding: 0 7px;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #727e91;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.rule-copy-button:hover:not(:disabled) {
+  border-color: #aeb9d5;
+  color: var(--brand-strong);
+}
+
+.rule-copy-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.nested-rule-secondary {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(110px, 0.35fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px 9px 84px;
+}
+
+.nested-rule-option {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: #657187;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.empty-rule-group {
+  display: grid;
+  width: 100%;
+  min-height: 190px;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  border: 1px dashed #cfd6e2;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #7f899a;
+  cursor: pointer;
+}
+
+.empty-rule-group strong {
+  color: #46536a;
+  font-size: var(--text-md);
+}
+
+.empty-rule-group span {
+  font-size: var(--text-sm);
+}
+
+/* ==========================================================================
    11. 规则提供者列表与编辑器
    ========================================================================== */
 .provider-row {
@@ -2038,10 +2714,11 @@ textarea.code-input {
   accent-color: var(--brand);
 }
 
-/* ========================================================================== 
+/* ==========================================================================
    12. YAML 模板大纲、编辑器与实时检查
    ========================================================================== */
-.yaml-outline-list button {
+.yaml-outline-list button,
+.outline-list button {
   min-height: 47px;
 }
 
@@ -2269,9 +2946,11 @@ textarea.code-input {
 
 .yaml-drawer {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  width: min(610px, 62vw);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  width: min(760px, 72vw);
+  max-width: 100%;
   height: 100%;
+  min-height: 0;
   margin-left: auto;
   overflow: hidden;
   background: #ffffff;
@@ -2302,6 +2981,103 @@ textarea.code-input {
   margin-top: 2px;
   color: var(--ink-muted);
   font-size: 9px;
+}
+
+.validation-result.is-idle,
+.validation-result.is-stale {
+  border-color: #e6d8bd;
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+/* 完整输出的筛选与操作区在中等宽度下允许自然换行。 */
+.preview-controls {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #ffffff;
+}
+
+.preview-controls label {
+  display: grid;
+  min-width: 132px;
+  flex: 1 1 150px;
+  gap: 4px;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.preview-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 32px 0 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+}
+
+.preview-controls .button {
+  min-height: 36px;
+  flex: 0 0 auto;
+}
+
+.yaml-preview-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #273245;
+  background: #192231;
+  color: #8794a8;
+  font-size: var(--text-xs);
+}
+
+.yaml-preview-meta > span:first-child {
+  color: #76c8a1;
+  font-weight: 650;
+}
+
+/* 代码区自身承担双向滚动，抽屉标题与操作区始终固定可见。 */
+.yaml-preview {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 16px 18px 28px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  background: #151d2a;
+  color: #cbd5e3;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  line-height: 1.68;
+  tab-size: 2;
+  white-space: pre;
+  scrollbar-width: thin;
+  scrollbar-color: #58657a #1b2535;
+}
+
+.yaml-preview:focus-visible {
+  position: relative;
+  outline: 3px solid rgba(116, 145, 255, 0.55);
+  outline-offset: -3px;
+}
+
+.yaml-preview.is-error {
+  background: #281b22;
+  color: #ffc5ca;
 }
 
 .drawer-toolbar {
@@ -2466,7 +3242,7 @@ textarea.code-input {
   background: #161e2d !important;
   color: #c3ccdb !important;
   font-family: var(--font-mono) !important;
-  font-size: 9px !important;
+  font-size: var(--text-md) !important;
   line-height: 1.65 !important;
 }
 
@@ -2591,6 +3367,26 @@ textarea.code-input {
 /* ========================================================================== 
    14. 中等桌面：优先保证编辑区宽度，检查栏可折叠隐藏
    ========================================================================== */
+@media (max-width: 1380px) and (min-width: 900px) {
+  .unified-group-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .unified-group-context .field:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .selected-rule-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .selected-rule-actions {
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
 @media (max-width: 1270px) and (min-width: 900px) {
   .studio-grid:not(.base-studio-grid):not(.base-grid):not(.yaml-grid) {
     grid-template-columns: 226px minmax(0, 1fr);
@@ -2604,6 +3400,39 @@ textarea.code-input {
   .studio-grid.base-grid,
   .studio-grid.yaml-grid {
     grid-template-columns: 210px minmax(0, 1fr);
+  }
+}
+
+/*
+ * 中等桌面宽度下，左侧策略组列表会压缩规则编辑区。
+ * 提前把规则记录重排为多行，避免长规则值和目标策略被父卡片裁切。
+ */
+@media (max-width: 1180px) and (min-width: 900px),
+       (min-width: 1271px) and (max-width: 1380px) {
+  .nested-rule-primary,
+  .nested-rule-primary.with-target {
+    grid-template-columns: 48px 30px minmax(0, 1fr) 48px;
+  }
+
+  .nested-rule-type {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .rule-copy-button {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .nested-rule-value,
+  .nested-rule-placeholder,
+  .nested-rule-target {
+    grid-column: 1 / -1;
+  }
+
+  .nested-rule-secondary {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 9px;
   }
 }
 
@@ -2733,12 +3562,16 @@ textarea.code-input {
   }
 
   .parsed-nodes-panel {
+    height: min(320px, 38dvh);
     min-height: 220px;
+    max-height: 320px;
     flex: 0 0 auto;
   }
 
   .json-editor-panel {
+    height: min(620px, 72dvh);
     min-height: 520px;
+    max-height: 620px;
     flex: 0 0 auto;
   }
 
@@ -2794,6 +3627,15 @@ textarea.code-input {
     min-height: 580px;
   }
 
+  .studio-grid > .unified-group-list {
+    min-height: 300px;
+    max-height: 380px;
+  }
+
+  .studio-grid > .unified-group-editor {
+    min-height: 780px;
+  }
+
   .studio-grid > .inspector-panel {
     min-height: 300px;
   }
@@ -2801,8 +3643,64 @@ textarea.code-input {
   .entity-list,
   .provider-list,
   .category-list,
-  .yaml-outline-list {
+  .yaml-outline-list,
+  .outline-list {
     max-height: 300px;
+  }
+
+  .unified-group-list .entity-list {
+    max-height: 250px;
+  }
+
+  .unified-group-context {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .group-pane-tabs {
+    overflow-x: auto;
+  }
+
+  .nested-rule-toolbar,
+  .nested-section-heading,
+  .selected-rule-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .nested-rule-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .selected-rule-actions {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .nested-rule-primary,
+  .nested-rule-primary.with-target {
+    grid-template-columns: 48px 30px minmax(0, 1fr) 48px;
+  }
+
+  .nested-rule-type {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .rule-copy-button {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .nested-rule-value,
+  .nested-rule-placeholder,
+  .nested-rule-target {
+    grid-column: 1 / -1;
+  }
+
+  .nested-rule-secondary {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 9px;
   }
 
   .source-fields {
@@ -2883,6 +3781,20 @@ textarea.code-input {
   }
 }
 
+/* 触屏设备没有稳定的悬停态，排序操作必须保持可见。 */
+@media (hover: none) {
+  .unified-group-row .row-order-actions {
+    opacity: 1;
+  }
+
+  .row-order-actions button,
+  .selected-rule-actions button,
+  .segmented-control button,
+  .password-toggle {
+    min-height: 44px;
+  }
+}
+
 /* ========================================================================== 
    16. 手机窄屏细化：标题操作、表格容器与弹窗按钮
    ========================================================================== */
@@ -2916,14 +3828,39 @@ textarea.code-input {
     padding-bottom: 2px;
   }
 
+  /* 标题仍为菜单按钮预留位置，操作栏则回到整行并优先显示主操作。 */
+  .workspace-actions {
+    width: calc(100% + 46px);
+    margin-left: -46px;
+  }
+
   .workspace-actions .button,
   .header-actions .button {
     flex: 0 0 auto;
   }
 
+  .workspace-actions .button.primary {
+    order: -1;
+  }
+
   .subscription-panel,
   .output-panel {
     border-radius: 8px;
+  }
+
+  /* 窄屏横向浏览表格时固定操作列，让删除入口始终可见。 */
+  .subscription-table th:last-child,
+  .subscription-table td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #ffffff;
+    box-shadow: -10px 0 14px -14px rgba(24, 35, 58, 0.7);
+  }
+
+  .subscription-table th:last-child {
+    z-index: 3;
+    background: #f7f8fa;
   }
 
   .output-row {
@@ -2945,7 +3882,43 @@ textarea.code-input {
   }
 
   .panel-header-actions {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .source-heading {
+    flex-direction: column;
+  }
+
+  .button-cluster {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .preview-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    padding: 10px 12px;
+  }
+
+  .preview-controls label,
+  .preview-controls .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .yaml-preview-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 12px;
+  }
+
+  .yaml-preview {
+    padding: 13px 14px 24px;
+    font-size: 12px;
   }
 
   .source-menu {
@@ -3161,6 +4134,13 @@ textarea.code-input {
 .yaml-code {
   font-size: var(--text-md);
   line-height: 1.65;
+}
+
+/* 使用更具体的选择器覆盖早期高密度原型字号。 */
+.parsed-node-row > div span,
+.toast > strong + span {
+  font-size: var(--text-xs);
+  line-height: 1.45;
 }
 
 .entity-row {

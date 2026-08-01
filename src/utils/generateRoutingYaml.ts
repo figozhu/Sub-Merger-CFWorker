@@ -1,6 +1,7 @@
 import YAML, { isSeq } from 'yaml'
 import type { RoutingConfig } from '../types/routing'
 import { resolveProxyGroups, type GroupMatchPreview, type ProxyNode, type ResolveProxyGroupsContext } from './resolveProxyGroups'
+import { getLegacyRuleTargetName } from './routingRuleTarget'
 
 /** 单次动态路由 YAML 生成结果。 */
 export interface GeneratedRoutingYaml {
@@ -10,12 +11,14 @@ export interface GeneratedRoutingYaml {
 
 /**
  * 将规则目标稳定 ID 解析为最终 YAML 使用的名称。
- * 内置目标使用 `builtin:` 前缀保存，策略组改名后从当前配置读取最新名称。
+ * 内置目标使用 `builtin:` 前缀保存；迁移保留目标还原为旧节点名称；策略组改名后读取最新名称。
  * @param targetGroupId 规则保存的稳定目标 ID。
  * @param groupNames 策略组 ID 到名称的映射。
  * @returns 最终策略名称；损坏引用返回原 ID，随后可由校验接口定位。
  */
 function resolveRuleTarget(targetGroupId: string, groupNames: Map<string, string>): string {
+  const legacyTargetName = getLegacyRuleTargetName(targetGroupId)
+  if (legacyTargetName) return legacyTargetName
   if (targetGroupId.startsWith('builtin:')) return targetGroupId.slice('builtin:'.length)
   return groupNames.get(targetGroupId) ?? targetGroupId
 }

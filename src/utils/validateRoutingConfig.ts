@@ -6,6 +6,7 @@ import type {
   RoutingValidationIssue,
   RoutingValidationResult,
 } from '../types/routing'
+import { getLegacyRuleTargetName, LEGACY_RULE_TARGET_PREFIX } from './routingRuleTarget'
 
 /** YAML 模板中由订阅合并器或路由配置独占管理的顶级字段。 */
 const MANAGED_YAML_FIELDS = new Set(['proxies', 'proxy-groups', 'rule-providers', 'rules'])
@@ -31,6 +32,7 @@ const SUPPORTED_RULE_TYPES = new Set([
   'IP-CIDR',
   'RULE-SET',
   'PROCESS-NAME',
+  'PROCESS-NAME-WILDCARD',
   'GEOIP',
   'MATCH',
 ])
@@ -570,20 +572,22 @@ function validateProviders(
 /**
  * 校验结构化路由规则、稳定引用、MATCH 位置及 no-resolve 组合。
  *
- * 为兼容旧配置，规则目标除启用策略组 ID 外还允许 `builtin:DIRECT` 和
- * `builtin:REJECT`。no-resolve 在旧配置的多种非 MATCH 规则上均有使用，因此服务端保留
- * 这些组合，仅禁止 MATCH 携带 no-resolve。
+ * 为兼容旧配置，规则目标除启用策略组 ID 外还允许内置目标和直接节点名称。
+ * 直接节点名称无法在静态配置校验阶段确认是否仍存在，因此作为提醒返回但不阻断迁移；
+ * no-resolve 在旧配置的多种非 MATCH 规则上均有使用，因此仅禁止 MATCH 携带该选项。
  *
  * @param rules 原始 rules 值。
  * @param enabledGroupsById 启用策略组 ID 映射。
  * @param enabledProvidersById 启用规则提供者 ID 映射。
  * @param errors 收集阻断发布的问题。
+ * @param warnings 收集需要管理员确认但不阻断发布的兼容问题。
  */
 function validateRules(
   rules: unknown,
   enabledGroupsById: Map<string, UnknownRecord>,
   enabledProvidersById: Map<string, UnknownRecord>,
   errors: RoutingValidationIssue[],
+  warnings: RoutingValidationIssue[],
 ): void {
   if (!Array.isArray(rules)) {
     addIssue(errors, 'RULES_NOT_ARRAY', 'rules', '路由规则必须是数组')
@@ -672,7 +676,14 @@ function validateRules(
       addIssue(errors, 'RULE_TARGET_REQUIRED', `${rulePath}.targetGroupId`, '启用的路由规则必须指定目标策略组或内置目标')
     } else {
       const target = rule.targetGroupId
-      if (!SUPPORTED_BUILTIN_TARGETS.has(target) && !enabledGroupsById.has(target)) {
+      const legacyTargetName = getLegacyRuleTargetName(target)
+      if (target.startsWith(LEGACY_RULE_TARGET_PREFIX) && !legacyTargetName) {
+        addIssue(errors, 'RULE_LEGACY_TARGET_INVALID', `${rulePath}.targetGroupId`, '迁移保留的直接节点目标不能为空')
+      } else if (legacyTargetName && /[\r\n,]/.test(legacyTargetName)) {
+        addIssue(errors, 'RULE_LEGACY_TARGET_INVALID', `${rulePath}.targetGroupId`, '直接节点目标不能包含逗号或换行符')
+      } else if (legacyTargetName) {
+        addIssue(warnings, 'RULE_LEGACY_TARGET_UNVERIFIED', `${rulePath}.targetGroupId`, `规则继续直接指向旧节点“${legacyTargetName}”，请确认该节点仍存在`)
+      } else if (!SUPPORTED_BUILTIN_TARGETS.has(target) && !enabledGroupsById.has(target)) {
         addIssue(errors, 'RULE_TARGET_NOT_ENABLED', `${rulePath}.targetGroupId`, `目标策略组不存在或未启用：${target}`)
       }
     }
@@ -722,7 +733,7 @@ export function validateRoutingConfig(input: unknown): RoutingValidationResult {
   validateBaseYaml(input.baseYaml, errors)
   const { enabledGroupsById } = validateGroups(input.groups, errors)
   const enabledProvidersById = validateProviders(input.providers, errors)
-  validateRules(input.rules, enabledGroupsById, enabledProvidersById, errors)
+  validateRules(input.rules, enabledGroupsById, enabledProvidersById, errors, warnings)
 
   return {
     valid: errors.length === 0,

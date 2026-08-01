@@ -9,10 +9,20 @@
           "path": "routing-studio-prototype.html",
           "createdAt": "2026-07-22T06:37:51.509Z",
           "status": "needs-review"
+        },
+        {
+          "path": "routing-studio-prototype-v2.html",
+          "createdAt": "2026-07-25T12:01:38.231Z",
+          "status": "needs-review",
+          "subtitle": "策略组内嵌分流规则、记录复制与上下插入、全局顺序检查",
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          }
         }
       ]
     }
   },
   "createdAt": "2026-07-22T06:37:51.509Z",
-  "updatedAt": "2026-07-22T07:00:24.154Z"
+  "updatedAt": "2026-07-25T12:01:38.232Z"
 }

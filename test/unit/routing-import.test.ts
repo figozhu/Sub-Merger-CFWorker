@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import YAML from 'yaml'
 import { importRoutingConfigYaml } from '../../src/config/routingMigration'
 import { generateRoutingYaml } from '../../src/utils/generateRoutingYaml'
+import { validateRoutingConfig } from '../../src/utils/validateRoutingConfig'
 
 /**
  * 生成覆盖四类拆分数据、稳定引用和规则前置注释的完整 Clash YAML。
@@ -119,5 +120,40 @@ rules:
     }).yaml
     expect(generated).not.toContain('# Google 服务')
     expect(YAML.parse(generated).rules).toHaveLength(2)
+  })
+
+  it('保留旧配置中直接指向节点的目标和进程通配符规则', () => {
+    const imported = importRoutingConfigYaml(`
+proxies:
+  - name: 固定节点
+    type: ss
+    server: th.example.com
+    port: 443
+rules:
+  - PROCESS-NAME-WILDCARD,Codex*,固定节点,no-resolve
+  - MATCH,DIRECT
+`)
+
+    expect(imported.errors).toEqual([])
+    expect(imported.config?.rules[0]).toMatchObject({
+      type: 'PROCESS-NAME-WILDCARD',
+      targetGroupId: 'legacy-target:固定节点',
+      noResolve: true,
+    })
+    const validation = validateRoutingConfig(imported.config)
+    expect(validation.errors).toEqual([])
+    expect(validation.warnings.map((issue) => issue.code)).toContain('RULE_LEGACY_TARGET_UNVERIFIED')
+
+    const generated = generateRoutingYaml(imported.config!, {
+      subscriptionNodes: [],
+      selfNodes: [{ name: '固定节点', type: 'ss', server: 'th.example.com', port: 443 }],
+      output: 'monthly',
+      client: 'normal',
+      globalExcludePattern: '',
+    }).yaml
+    expect(YAML.parse(generated).rules).toEqual([
+      'PROCESS-NAME-WILDCARD,Codex*,固定节点,no-resolve',
+      'MATCH,DIRECT',
+    ])
   })
 })

@@ -120,12 +120,13 @@ function PageHeader({ dirty, lastSaved, onImport, onValidate, onSave, onPublish 
  * @param {string} props.activeTab 当前标签页。
  * @param {Function} props.onChange 标签页切换回调。
  * @param {object} props.counts 各标签页数量。
+ * @param {boolean} [props.nestRules=false] 是否把路由规则并入策略组工作区。
  * @returns {React.ReactElement} 二级导航。
  */
-function StudioTabs({ activeTab, onChange, counts }) {
+function StudioTabs({ activeTab, onChange, counts, nestRules = false }) {
   const tabs = [
-    { id: "groups", label: "策略组", icon: "nodes", count: counts.groups },
-    { id: "rules", label: "路由规则", icon: "route", count: counts.rules },
+    { id: "groups", label: nestRules ? "策略组与分流" : "策略组", icon: "nodes", count: counts.groups },
+    ...(!nestRules ? [{ id: "rules", label: "路由规则", icon: "route", count: counts.rules }] : []),
     { id: "providers", label: "规则提供者", icon: "layers", count: counts.providers },
     { id: "base", label: "YAML 模板", icon: "code" }
   ];

@@ -135,7 +135,7 @@ export function renderDashboardPage(): string {
       <button type="button" class="sidebar-backdrop" id="sidebar-backdrop" aria-label="关闭导航"></button>
       <main class="main-shell">
         <button type="button" class="mobile-menu-button" id="mobile-menu-button" aria-label="打开导航" aria-expanded="false" aria-controls="sidebar">菜单</button>
-        <section id="workspace" class="workspace-page" aria-live="polite">
+        <section id="workspace" class="workspace-page">
           <div class="loading-screen"><span class="loading-spinner"></span><strong>正在加载配置…</strong></div>
         </section>
       </main>

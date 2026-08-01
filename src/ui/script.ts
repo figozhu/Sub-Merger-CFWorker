@@ -12,6 +12,10 @@ export const consoleClientScript = String.raw`
   const overlayRoot = document.getElementById('overlay-root');
   const toastRoot = document.getElementById('toast-root');
   const sidebar = document.getElementById('sidebar');
+  /** 记录打开浮层前的焦点元素，关闭后尽量把键盘操作位置还给用户。 */
+  let overlayReturnFocus = null;
+  /** 完整预览生成新节点摘要后，关闭浮层时需要重绘后台页面。 */
+  let overlayNeedsRender = false;
 
   /** 控制台全部可变状态；只保存真实 API 数据和当前编辑状态。 */
   const state = {
@@ -29,12 +33,15 @@ export const consoleClientScript = String.raw`
     selectedGroupId: '',
     selectedRuleId: '',
     selectedProviderId: '',
+    groupPane: 'rules',
+    groupRuleScope: 'group',
     groupQuery: '',
     ruleQuery: '',
-    ruleCategory: 'all',
     providerQuery: '',
     routingIssues: { errors: [], warnings: [] },
+    routingValidatedSnapshot: '',
     routingPreviews: {},
+    previewRequestId: 0,
     busy: new Set(),
     suppressHash: false,
   };
@@ -94,6 +101,7 @@ export const consoleClientScript = String.raw`
   function showToast(message, tone, detail) {
     const toast = document.createElement('div');
     toast.className = 'toast ' + (tone || 'success');
+    toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
     toast.innerHTML = '<strong>' + escapeHtml(message) + '</strong>' + (detail ? '<span>' + escapeHtml(detail) + '</span>' : '');
     toastRoot.appendChild(toast);
     window.setTimeout(function () { toast.classList.add('leaving'); }, 2800);
@@ -216,7 +224,8 @@ export const consoleClientScript = String.raw`
       state.routingBaseline = JSON.stringify(results[2].config);
       state.outputs = results[3].outputs || [];
       state.selectedGroupId = results[2].config.groups[0] ? results[2].config.groups[0].id : '';
-      state.selectedRuleId = results[2].config.rules[0] ? results[2].config.rules[0].id : '';
+      const firstGroupRule = results[2].config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+      state.selectedRuleId = firstGroupRule ? firstGroupRule.id : '';
       state.selectedProviderId = results[2].config.providers[0] ? results[2].config.providers[0].id : '';
       render();
     } catch (error) {
@@ -236,7 +245,7 @@ export const consoleClientScript = String.raw`
   function pageHeader(title, status, tone, actions) {
     return '<header class="page-header workspace-header"><div class="title-stack"><div class="title-line"><h1>'
       + escapeHtml(title) + '</h1><span class="workspace-status ' + escapeHtml(tone || 'saved')
-      + '"><span class="workspace-status-dot"></span>' + escapeHtml(status) + '</span></div></div><div class="header-actions workspace-actions">'
+      + '" role="status" aria-live="polite" aria-atomic="true"><span class="workspace-status-dot"></span>' + escapeHtml(status) + '</span></div></div><div class="header-actions workspace-actions">'
       + (actions || '') + '</div></header>';
   }
 
@@ -248,12 +257,14 @@ export const consoleClientScript = String.raw`
     const dirty = JSON.stringify(state.subscriptions) !== state.subscriptionsBaseline;
     const rows = state.subscriptions.map(function (subscription, index) {
       const errors = state.subscriptionErrors[index] || {};
+      const nameErrorId = 'subscription-name-error-' + index;
+      const urlErrorId = 'subscription-url-error-' + index;
       return '<tr class="' + (Object.keys(errors).length ? 'row-invalid' : '') + '" data-sub-index="' + index + '">'
-        + '<td><input data-sub-field="subName" value="' + escapeHtml(subscription.subName) + '" aria-label="订阅源名称" placeholder="订阅源名称" class="' + (errors.subName ? 'invalid' : '') + '">'
-        + (errors.subName ? '<small class="cell-error">' + escapeHtml(errors.subName) + '</small>' : '') + '</td>'
+        + '<td><input data-sub-field="subName" value="' + escapeHtml(subscription.subName) + '" aria-label="订阅源名称" placeholder="订阅源名称" class="' + (errors.subName ? 'invalid' : '') + '"' + (errors.subName ? ' aria-invalid="true" aria-describedby="' + nameErrorId + '"' : '') + '>'
+        + (errors.subName ? '<small class="cell-error" id="' + nameErrorId + '">' + escapeHtml(errors.subName) + '</small>' : '') + '</td>'
         + '<td><select data-sub-field="subType" aria-label="订阅类型"><option value="包年/包月"' + (subscription.subType === '包年/包月' ? ' selected' : '') + '>包年/包月</option><option value="流量包"' + (subscription.subType === '流量包' ? ' selected' : '') + '>流量包</option></select></td>'
-        + '<td><input data-sub-field="subUrl" value="' + escapeHtml(subscription.subUrl) + '" aria-label="订阅地址" placeholder="https://example.com/sub" spellcheck="false" class="' + (errors.subUrl ? 'invalid' : '') + '">'
-        + (errors.subUrl ? '<small class="cell-error">' + escapeHtml(errors.subUrl) + '</small>' : '') + '</td>'
+        + '<td><input data-sub-field="subUrl" value="' + escapeHtml(subscription.subUrl) + '" aria-label="订阅地址" placeholder="https://example.com/sub" spellcheck="false" class="' + (errors.subUrl ? 'invalid' : '') + '"' + (errors.subUrl ? ' aria-invalid="true" aria-describedby="' + urlErrorId + '"' : '') + '>'
+        + (errors.subUrl ? '<small class="cell-error" id="' + urlErrorId + '">' + escapeHtml(errors.subUrl) + '</small>' : '') + '</td>'
         + '<td><button type="button" class="icon-button danger" data-action="delete-subscription" data-index="' + index + '" aria-label="删除 ' + escapeHtml(subscription.subName || '订阅源') + '">删除</button></td></tr>';
     }).join('');
     const actions = '<button type="button" class="button secondary" data-action="add-subscription">添加订阅源</button>'
@@ -267,23 +278,33 @@ export const consoleClientScript = String.raw`
   }
 
   /**
+   * 生成一条自建节点摘要，确保初次渲染与输入时的实时预览完全一致。
+   * @param {object} node 节点对象。
+   * @param {number} index 节点在 JSON 数组中的索引。
+   * @returns {string} 已转义的节点摘要 HTML。
+   */
+  function renderParsedNodeRow(node, index) {
+    const protocol = String(node.type || '?').toUpperCase();
+    const name = node.name || ('未命名节点 ' + (index + 1));
+    const address = String(node.server || '—') + (node.port ? ':' + node.port : '');
+    return '<div class="parsed-node-row"><span class="node-protocol" title="' + escapeHtml(protocol) + '">' + escapeHtml(protocol) + '</span><div><strong title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</strong><span title="' + escapeHtml(address) + '">' + escapeHtml(address) + '</span></div></div>';
+  }
+
+  /**
    * 渲染自建节点摘要、JSON 编辑器、行号和实时校验状态。
    * @returns {string} 自建节点页面 HTML。
    */
   function renderNodesPage() {
     const analysis = state.selfNodeAnalysis;
     const dirty = state.selfNodesRaw !== state.selfNodesBaseline;
-    const nodes = analysis.nodes.map(function (node, index) {
-      return '<div class="parsed-node-row"><span class="node-protocol">' + escapeHtml(String(node.type || '?').toUpperCase()) + '</span><div><strong>'
-        + escapeHtml(node.name || ('未命名节点 ' + (index + 1))) + '</strong><span>' + escapeHtml(node.server || '—') + (node.port ? ':' + escapeHtml(node.port) : '') + '</span></div></div>';
-    }).join('');
+    const nodes = analysis.nodes.map(renderParsedNodeRow).join('');
     const lines = state.selfNodesRaw.split('\n').map(function (_, index) { return '<span>' + (index + 1) + '</span>'; }).join('');
     const actions = '<button type="button" class="button secondary" data-action="format-self-nodes">格式化</button>'
       + '<button type="button" class="button primary" data-action="save-self-nodes" data-busy-key="selfNodes"' + (!dirty || !analysis.valid ? ' disabled' : '') + '>保存节点</button>';
     const status = analysis.valid ? (dirty ? '有未保存更改' : analysis.nodes.length + ' 个节点') : 'JSON 无效';
     return pageHeader('自建节点', status, analysis.valid ? (dirty ? 'dirty' : 'saved') : 'error', actions)
       + '<div class="workspace-content nodes-workspace"><section class="data-panel parsed-nodes-panel"><div class="simple-panel-head"><h2>节点</h2><span>' + analysis.nodes.length + '</span></div><div class="parsed-node-list">'
-      + (nodes || '<div class="empty-list">暂无可显示节点</div>') + '</div></section>'
+      + (nodes || '<div class="empty-list">' + (analysis.valid ? '暂无可显示节点' : 'JSON 无效，修复后恢复节点预览') + '</div>') + '</div></section>'
       + '<section class="data-panel json-editor-panel"><div class="code-toolbar"><span>self-nodes.json</span><span>UTF-8 · 2 空格</span></div><div class="code-editor-grid node-code-grid"><div class="yaml-line-rail" id="node-line-rail" aria-hidden="true">'
       + lines + '</div><textarea id="self-nodes-editor" class="base-yaml-textarea node-json-textarea" spellcheck="false" aria-label="自建节点 JSON">' + escapeHtml(state.selfNodesRaw) + '</textarea></div>'
       + '<div class="editor-validation ' + (analysis.valid ? 'valid' : 'invalid') + '"><span>' + escapeHtml(analysis.valid ? analysis.nodes.length + ' 个节点，格式有效' : analysis.errors[0].message) + '</span></div></section></div>';
@@ -295,15 +316,15 @@ export const consoleClientScript = String.raw`
    */
   function renderOutputsPage() {
     const rows = state.outputs.map(function (output, index) {
-      return '<article class="output-row"><div class="output-type"><span class="output-icon" aria-hidden="true"></span><div><strong>' + escapeHtml(output.name) + '</strong><span>' + escapeHtml(output.sourceCount) + ' 个订阅源</span></div></div>'
-        + '<code>' + escapeHtml(output.url) + '</code><button type="button" class="button secondary" data-action="copy-output" data-index="' + index + '">复制</button></article>';
+      return '<article class="output-row"><div class="output-type"><div><strong>' + escapeHtml(output.name) + '</strong><span>' + escapeHtml(output.sourceCount) + ' 个订阅源</span></div></div>'
+        + '<code title="' + escapeHtml(output.url) + '">' + escapeHtml(output.url) + '</code><button type="button" class="button secondary" data-action="copy-output" data-index="' + index + '" aria-label="复制' + escapeHtml(output.name) + '订阅链接">复制</button></article>';
     }).join('');
     return pageHeader('订阅输出', state.outputs.length + ' 个链接', 'saved', '')
       + '<div class="workspace-content"><section class="data-panel output-panel"><div class="output-list">' + rows + '</div></section></div>';
   }
 
   /**
-   * 生成策略组下拉选项，并包含兼容旧规则使用的 DIRECT/REJECT 目标。
+   * 生成策略组下拉选项，并包含兼容旧规则使用的内置目标和直接节点目标。
    * @param {string} selected 当前选中 ID。
    * @param {string} excludedId 需要排除的当前策略组 ID。
    * @returns {string} option HTML。
@@ -316,6 +337,10 @@ export const consoleClientScript = String.raw`
     if (!excludedId) {
       options.push('<option value="builtin:DIRECT"' + (selected === 'builtin:DIRECT' ? ' selected' : '') + '>DIRECT</option>');
       options.push('<option value="builtin:REJECT"' + (selected === 'builtin:REJECT' ? ' selected' : '') + '>REJECT</option>');
+      if (selected.indexOf('legacy-target:') === 0) {
+        const legacyName = selected.slice('legacy-target:'.length) || '未命名节点';
+        options.push('<option value="' + escapeHtml(selected) + '" selected>直接节点：' + escapeHtml(legacyName) + '（迁移保留）</option>');
+      }
     }
     return options.join('');
   }
@@ -337,7 +362,7 @@ export const consoleClientScript = String.raw`
    * @returns {string} option HTML。
    */
   function ruleTypeOptions(selected) {
-    return ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'RULE-SET', 'PROCESS-NAME', 'GEOIP', 'MATCH'].map(function (type) {
+    return ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'RULE-SET', 'PROCESS-NAME', 'PROCESS-NAME-WILDCARD', 'GEOIP', 'MATCH'].map(function (type) {
       return '<option value="' + type + '"' + (selected === type ? ' selected' : '') + '>' + type + '</option>';
     }).join('');
   }
@@ -369,62 +394,106 @@ export const consoleClientScript = String.raw`
   }
 
   /**
-   * 渲染策略组列表、当前组编辑器和真实节点匹配预览。
+   * 渲染当前策略组的成员来源、健康检查与节点匹配预览。
+   *
+   * 这些设置与分流规则共用同一个策略组上下文，通过组内二级页签切换，
+   * 不再要求用户回到独立模块寻找对应对象。
+   * @param {object} group 当前策略组。
+   * @returns {string} 策略组运行设置 HTML。
+   */
+  function renderGroupSettings(group) {
+    const preview = state.routingPreviews[group.id] || { count: 0, names: [] };
+    const healthRequired = group.type !== 'select';
+    const health = group.healthCheck || { url: 'https://www.gstatic.com/generate_204', interval: 600, tolerance: 80, strategy: 'consistent-hashing' };
+    const previewNames = preview.names.map(function (name) {
+      return '<span class="node-chip" role="listitem" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>';
+    }).join('');
+    const remainingCount = Math.max(0, preview.count - preview.names.length);
+    const remainingNodeSummary = remainingCount > 0
+      ? '<span class="node-preview-more" role="listitem">另有 ' + remainingCount + ' 个节点未展开</span>'
+      : '';
+    const healthFields = healthRequired ? '<section class="form-section"><div class="section-heading"><div><h3>健康检查</h3><p>生成测速、切换或负载均衡参数。</p></div></div><div class="form-grid three-columns"><label class="field span-two"><span>测试地址</span><input data-group-health="url" value="' + escapeHtml(health.url) + '"></label><label class="field"><span>间隔（秒）</span><input type="number" min="1" data-group-health="interval" value="' + escapeHtml(health.interval) + '"></label>'
+      + (group.type === 'url-test' ? '<label class="field"><span>延迟容差</span><input type="number" min="0" data-group-health="tolerance" value="' + escapeHtml(health.tolerance || 0) + '"></label>' : '')
+      + (group.type === 'load-balance' ? '<label class="field"><span>负载策略</span><select data-group-health="strategy"><option value="consistent-hashing"' + (health.strategy === 'consistent-hashing' ? ' selected' : '') + '>consistent-hashing</option><option value="round-robin"' + (health.strategy === 'round-robin' ? ' selected' : '') + '>round-robin</option></select></label>' : '') + '</div></section>' : '';
+    return '<div class="nested-group-settings"><section class="form-section first-section"><div class="section-heading source-heading"><div><h3>成员来源</h3><p>按从上到下的顺序生成节点，并自动去重。</p></div><div class="button-cluster"><button class="button secondary small" data-action="add-source" data-kind="filter">添加筛选器</button><button class="button secondary small" data-action="add-source" data-kind="group">引用策略组</button><button class="button secondary small" data-action="add-source" data-kind="builtin">内置策略</button></div></div><div class="source-list">' + group.sources.map(function (source, index) { return renderSourceCard(source, group, index); }).join('') + '</div></section>'
+      + healthFields + '<section class="form-section"><div class="section-heading"><div><h3>节点匹配预览</h3><p>基于最近一次真实订阅预览。</p></div><strong class="preview-count">' + preview.count + ' 个节点</strong></div><div class="node-preview-list" role="list" aria-label="匹配到的节点">' + (previewNames ? previewNames + remainingNodeSummary : '<span class="node-preview-empty">尚未生成预览，点击右侧“预览完整 YAML”获取真实节点匹配。</span>') + '</div></section></div>';
+  }
+
+  /**
+   * 渲染当前策略组下的嵌套分流规则。
+   *
+   * 默认范围只显示目标为当前策略组的规则；全局范围仍在同一面板中展示
+   * 最终扁平顺序，以支持 DIRECT、REJECT 与跨策略组顺序检查。
+   * @param {object} group 当前策略组。
+   * @returns {string} 分流规则编辑区 HTML。
+   */
+  function renderNestedRules(group) {
+    const rules = state.routing.config.rules;
+    const scopedRules = state.groupRuleScope === 'global' ? rules : rules.filter(function (rule) { return rule.targetGroupId === group.id; });
+    const keyword = state.ruleQuery.trim().toLowerCase();
+    const visibleRules = scopedRules.filter(function (rule) {
+      return !keyword || [rule.type, rule.value, rule.category, rule.remark].join(' ').toLowerCase().indexOf(keyword) >= 0;
+    });
+    const selectedRule = rules.find(function (rule) { return rule.id === state.selectedRuleId; });
+    const selectedVisible = Boolean(selectedRule && scopedRules.some(function (rule) { return rule.id === selectedRule.id; }));
+    const selectedGlobalIndex = selectedRule ? rules.findIndex(function (rule) { return rule.id === selectedRule.id; }) : -1;
+    const selectedScopeIndex = selectedRule ? scopedRules.findIndex(function (rule) { return rule.id === selectedRule.id; }) : -1;
+    const selectedIsFinalMatch = Boolean(selectedRule && selectedRule.enabled && selectedRule.type === 'MATCH');
+    const nextScopeRule = selectedScopeIndex >= 0 ? scopedRules[selectedScopeIndex + 1] : null;
+    const moveDownWouldCrossMatch = Boolean(nextScopeRule && nextScopeRule.enabled && nextScopeRule.type === 'MATCH');
+    const rows = visibleRules.map(function (rule) {
+      const index = rules.findIndex(function (item) { return item.id === rule.id; });
+      const valueControl = rule.type === 'MATCH'
+        ? '<div class="nested-rule-placeholder">最终兜底，无需匹配内容</div>'
+        : rule.type === 'RULE-SET'
+          ? '<select class="nested-rule-value" data-rule-field="providerId" data-rule-index="' + index + '" aria-label="规则提供者">' + providerOptions(rule.providerId) + '</select>'
+          : '<input class="nested-rule-value" data-rule-field="value" data-rule-index="' + index + '" value="' + escapeHtml(rule.value || '') + '" aria-label="匹配内容">';
+      const targetControl = state.groupRuleScope === 'global'
+        ? '<select class="nested-rule-target" data-rule-field="targetGroupId" data-rule-index="' + index + '" aria-label="目标策略">' + groupOptions(rule.targetGroupId, '') + '</select>'
+        : '';
+      return '<article class="nested-rule-record ' + (state.selectedRuleId === rule.id ? 'selected ' : '') + (!rule.enabled ? 'disabled' : '') + '"><div class="nested-rule-primary ' + (state.groupRuleScope === 'global' ? 'with-target' : '') + '">'
+        + '<button class="rule-order-button" data-action="select-rule" data-id="' + escapeHtml(rule.id) + '" aria-label="选择第 ' + (index + 1) + ' 条规则">#' + String(index + 1).padStart(2, '0') + '</button>'
+        + '<label class="nested-rule-enable" title="启用规则"><input type="checkbox" data-rule-field="enabled" data-rule-index="' + index + '"' + (rule.enabled ? ' checked' : '') + ' aria-label="启用规则"></label>'
+        + '<select class="nested-rule-type" data-rule-field="type" data-rule-index="' + index + '" aria-label="规则类型">' + ruleTypeOptions(rule.type) + '</select>'
+        + valueControl + targetControl
+        + '<button class="rule-copy-button" data-action="duplicate-rule" data-id="' + escapeHtml(rule.id) + '" aria-label="复制规则"' + (rule.type === 'MATCH' ? ' disabled' : '') + '>复制</button></div>'
+        + '<div class="nested-rule-secondary"><input data-rule-field="remark" data-rule-index="' + index + '" value="' + escapeHtml(rule.remark || '') + '" placeholder="备注：导出为规则上方注释" aria-label="规则备注"><input data-rule-field="category" data-rule-index="' + index + '" value="' + escapeHtml(rule.category || 'general') + '" aria-label="规则分类"><label class="nested-rule-option"><input type="checkbox" data-rule-field="noResolve" data-rule-index="' + index + '"' + (rule.noResolve ? ' checked' : '') + (rule.type === 'MATCH' ? ' disabled' : '') + '><span>no-resolve</span></label></div></article>';
+    }).join('');
+    const selectedToolbar = selectedVisible
+      ? '<div class="selected-rule-toolbar" role="toolbar" aria-label="选中规则操作"><div><span>已选</span><strong>#' + String(selectedGlobalIndex + 1).padStart(2, '0') + ' · ' + escapeHtml(selectedRule.type) + '</strong></div><div class="selected-rule-actions">'
+        + '<button data-action="insert-rule-above" data-id="' + escapeHtml(selectedRule.id) + '">上方插入</button><button data-action="insert-rule-below" data-id="' + escapeHtml(selectedRule.id) + '">下方插入</button>'
+        + '<button data-action="duplicate-rule" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedRule.type === 'MATCH' ? ' disabled' : '') + '>复制</button>'
+        + '<button data-action="move-selected-rule-up" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedScopeIndex <= 0 || selectedIsFinalMatch ? ' disabled' : '') + '>上移</button><button data-action="move-selected-rule-down" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedScopeIndex < 0 || selectedScopeIndex >= scopedRules.length - 1 || moveDownWouldCrossMatch ? ' disabled' : '') + '>下移</button>'
+        + '<button class="danger" data-action="delete-rule" data-index="' + selectedGlobalIndex + '">删除</button></div></div>'
+      : '<div class="rule-selection-hint">点击规则序号选中记录，即可在其上方或下方插入。</div>';
+    const empty = keyword ? '<div class="empty-rule-group"><strong>没有匹配的规则</strong><span>清除搜索条件后再试。</span></div>' : '<button class="empty-rule-group" data-action="add-rule"><strong>这个策略组还没有分流规则</strong><span>添加第一条规则，目标将自动设置为当前策略组。</span></button>';
+    return '<section class="nested-rules-panel"><div class="nested-section-heading"><div><h3>分流规则</h3><p>' + (state.groupRuleScope === 'global' ? '检查最终 YAML 的真实顺序，并处理 DIRECT / REJECT 规则。' : '新规则自动归属“' + escapeHtml(group.name) + '”，无需重复选择目标。') + '</p></div><button class="button primary small" data-action="add-rule">添加规则</button></div>'
+      + '<div class="nested-rule-toolbar"><div class="segmented-control nested-rule-scope" aria-label="规则显示范围"><button class="' + (state.groupRuleScope === 'group' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="group" aria-pressed="' + (state.groupRuleScope === 'group') + '">当前策略组 <span>' + rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length + '</span></button><button class="' + (state.groupRuleScope === 'global' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="global" aria-pressed="' + (state.groupRuleScope === 'global') + '">全局顺序 <span>' + rules.length + '</span></button></div><label class="nested-rule-search"><input id="rule-search" value="' + escapeHtml(state.ruleQuery) + '" placeholder="搜索类型、内容、备注或分类" aria-label="搜索规则"></label></div>'
+      + selectedToolbar + '<div class="nested-rule-list">' + (rows || empty) + '</div></section>';
+  }
+
+  /**
+   * 渲染策略组列表，以及“策略组 → 分流规则/成员设置”的统一编辑器。
    * @returns {{left:string,center:string}} 两栏 HTML。
    */
   function renderGroupsWorkspace() {
     const config = state.routing.config;
     const query = state.groupQuery.trim().toLowerCase();
     const visible = config.groups.filter(function (group) { return !query || group.name.toLowerCase().indexOf(query) >= 0 || group.type.indexOf(query) >= 0; });
-    const rows = visible.map(function (group, index) {
+    const rows = visible.map(function (group) {
       const preview = state.routingPreviews[group.id];
       const realIndex = config.groups.findIndex(function (item) { return item.id === group.id; });
-      return '<div class="entity-row ' + (state.selectedGroupId === group.id ? 'active ' : '') + (!group.enabled ? 'disabled' : '') + '" data-action="select-group" data-id="' + escapeHtml(group.id) + '"><span class="entity-copy"><strong>' + escapeHtml(group.name || '未命名策略组') + '</strong><small>' + escapeHtml(group.type) + ' · ' + (preview ? preview.count + ' 个节点' : '待预览') + '</small></span><span class="row-order-actions"><button data-action="move-group-up" data-index="' + realIndex + '"' + (realIndex === 0 ? ' disabled' : '') + '>上移</button><button data-action="move-group-down" data-index="' + realIndex + '"' + (realIndex === config.groups.length - 1 ? ' disabled' : '') + '>下移</button></span></div>';
+      const ruleCount = config.rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length;
+      return '<div class="entity-row unified-group-row ' + (state.selectedGroupId === group.id ? 'active ' : '') + (!group.enabled ? 'disabled' : '') + '"><button class="group-row-select" data-action="select-group" data-id="' + escapeHtml(group.id) + '" aria-pressed="' + (state.selectedGroupId === group.id) + '"><span class="entity-copy"><strong>' + escapeHtml(group.name || '未命名策略组') + '</strong><small>' + escapeHtml(group.type) + ' · ' + (preview ? preview.count + ' 个节点' : '待预览') + '</small></span><span class="group-rule-badge ' + (ruleCount ? '' : 'empty') + '">' + ruleCount + ' 条</span></button><span class="row-order-actions"><button data-action="move-group-up" data-index="' + realIndex + '"' + (realIndex === 0 ? ' disabled' : '') + '>上移</button><button data-action="move-group-down" data-index="' + realIndex + '"' + (realIndex === config.groups.length - 1 ? ' disabled' : '') + '>下移</button></span></div>';
     }).join('');
-    const left = '<section class="entity-panel group-list-panel"><div class="panel-header"><div><h2>策略组</h2><p>' + config.groups.filter(function (group) { return group.enabled; }).length + ' 个已启用</p></div><button class="icon-button brand" data-action="add-group" aria-label="新建策略组">新增</button></div><div class="panel-search"><input id="group-search" value="' + escapeHtml(state.groupQuery) + '" placeholder="搜索名称或类型" aria-label="搜索策略组"></div><div class="entity-list">' + (rows || '<div class="empty-search">未找到策略组</div>') + '</div></section>';
-
+    const left = '<section class="entity-panel group-list-panel unified-group-list"><div class="panel-header"><div><h2>策略组</h2><p>' + config.groups.filter(function (group) { return group.enabled; }).length + ' 个已启用 · 选择后配置其分流</p></div><button class="icon-button brand" data-action="add-group" aria-label="新建策略组">新增</button></div><div class="panel-search"><input id="group-search" value="' + escapeHtml(state.groupQuery) + '" placeholder="搜索名称或类型" aria-label="搜索策略组"></div><div class="entity-list" aria-label="策略组列表">' + (rows || '<div class="empty-search">未找到策略组</div>') + '</div></section>';
     const group = config.groups.find(function (item) { return item.id === state.selectedGroupId; });
-    if (!group) return { left: left, center: '<section class="editor-panel centered-empty"><h2>选择一个策略组</h2><p>从左侧列表选择，或新建一个策略组。</p></section>' };
-    const preview = state.routingPreviews[group.id] || { count: 0, names: [] };
-    const healthRequired = group.type !== 'select';
-    const health = group.healthCheck || { url: 'https://www.gstatic.com/generate_204', interval: 600, tolerance: 80, strategy: 'consistent-hashing' };
-    const previewNames = preview.names.map(function (name) { return '<span class="node-chip">' + escapeHtml(name) + '</span>'; }).join('');
-    const healthFields = healthRequired ? '<section class="form-section"><div class="section-heading"><h3>健康检查</h3></div><div class="form-grid three-columns"><label class="field"><span>测试地址</span><input data-group-health="url" value="' + escapeHtml(health.url) + '"></label><label class="field"><span>间隔（秒）</span><input type="number" min="1" data-group-health="interval" value="' + escapeHtml(health.interval) + '"></label>'
-      + (group.type === 'url-test' ? '<label class="field"><span>延迟容差</span><input type="number" min="0" data-group-health="tolerance" value="' + escapeHtml(health.tolerance || 0) + '"></label>' : '')
-      + (group.type === 'load-balance' ? '<label class="field"><span>负载策略</span><select data-group-health="strategy"><option value="consistent-hashing"' + (health.strategy === 'consistent-hashing' ? ' selected' : '') + '>consistent-hashing</option><option value="round-robin"' + (health.strategy === 'round-robin' ? ' selected' : '') + '>round-robin</option></select></label>' : '') + '</div></section>' : '';
-    const center = '<section class="editor-panel group-editor"><div class="panel-header"><div><h2>编辑策略组</h2></div><div class="panel-header-actions"><label class="switch-label"><span>已启用</span><input type="checkbox" data-group-field="enabled"' + (group.enabled ? ' checked' : '') + '></label><button class="icon-button" data-action="duplicate-group">复制</button><button class="icon-button danger" data-action="delete-group">删除</button></div></div><div class="editor-scroll">'
-      + '<section class="form-section first-section"><div class="section-heading"><h3>基本信息</h3></div><div class="form-grid two-columns"><label class="field"><span>策略组名称</span><input data-group-field="name" value="' + escapeHtml(group.name) + '"></label><label class="field"><span>策略类型</span><select data-group-field="type"><option value="select"' + (group.type === 'select' ? ' selected' : '') + '>手动选择（select）</option><option value="url-test"' + (group.type === 'url-test' ? ' selected' : '') + '>自动测速（url-test）</option><option value="fallback"' + (group.type === 'fallback' ? ' selected' : '') + '>故障转移（fallback）</option><option value="load-balance"' + (group.type === 'load-balance' ? ' selected' : '') + '>负载均衡（load-balance）</option></select></label></div></section>'
-      + '<section class="form-section"><div class="section-heading source-heading"><h3>成员来源</h3><div class="button-cluster"><button class="button secondary small" data-action="add-source" data-kind="filter">添加筛选器</button><button class="button secondary small" data-action="add-source" data-kind="group">引用策略组</button><button class="button secondary small" data-action="add-source" data-kind="builtin">内置策略</button></div></div><div class="source-list">' + group.sources.map(function (source, index) { return renderSourceCard(source, group, index); }).join('') + '</div></section>'
-      + healthFields + '<section class="form-section"><div class="section-heading"><h3>节点匹配预览</h3><strong class="preview-count">' + preview.count + ' 个节点</strong></div><div class="node-preview-list">' + (previewNames || '<span class="warning-copy">尚未生成预览，点击右侧“预览完整 YAML”获取真实节点匹配。</span>') + '</div></section></div></section>';
-    return { left: left, center: center };
-  }
-
-  /**
-   * 渲染规则分类、搜索与完整字段编辑表。
-   * @returns {{left:string,center:string}} 两栏 HTML。
-   */
-  function renderRulesWorkspace() {
-    const rules = state.routing.config.rules;
-    const categories = ['all'].concat(Array.from(new Set(rules.map(function (rule) { return rule.category || 'general'; }))));
-    const categoryRows = categories.map(function (category) {
-      const count = category === 'all' ? rules.length : rules.filter(function (rule) { return rule.category === category; }).length;
-      return '<button class="category-row ' + (state.ruleCategory === category ? 'active' : '') + '" data-action="select-rule-category" data-category="' + escapeHtml(category) + '"><span>' + escapeHtml(category === 'all' ? '全部规则' : category) + '</span><small>' + count + '</small></button>';
-    }).join('');
-    const left = '<section class="entity-panel rule-category-panel"><div class="panel-header"><div><h2>规则分类</h2><p>' + rules.length + ' 条规则</p></div><button class="icon-button brand" data-action="add-rule">新增</button></div><div class="category-list">' + categoryRows + '</div></section>';
-    const keyword = state.ruleQuery.trim().toLowerCase();
-    const filtered = rules.filter(function (rule) {
-      const categoryMatch = state.ruleCategory === 'all' || rule.category === state.ruleCategory;
-      const keywordMatch = !keyword || [rule.type, rule.value, rule.category, rule.remark].join(' ').toLowerCase().indexOf(keyword) >= 0;
-      return categoryMatch && keywordMatch;
-    });
-    const rows = filtered.map(function (rule) {
-      const index = rules.findIndex(function (item) { return item.id === rule.id; });
-      const valueControl = rule.type === 'MATCH' ? '<span class="muted-label">无需内容</span>' : rule.type === 'RULE-SET'
-        ? '<select data-rule-field="providerId" data-rule-index="' + index + '">' + providerOptions(rule.providerId) + '</select>'
-        : '<input data-rule-field="value" data-rule-index="' + index + '" value="' + escapeHtml(rule.value || '') + '">';
-      return '<tr data-rule-index="' + index + '"><td><input type="checkbox" data-rule-field="enabled" data-rule-index="' + index + '"' + (rule.enabled ? ' checked' : '') + ' aria-label="启用规则"></td><td><select data-rule-field="type" data-rule-index="' + index + '">' + ruleTypeOptions(rule.type) + '</select></td><td>' + valueControl + '</td><td><select data-rule-field="targetGroupId" data-rule-index="' + index + '">' + groupOptions(rule.targetGroupId, '') + '</select></td><td><textarea class="rule-remark-input" rows="2" data-rule-field="remark" data-rule-index="' + index + '" placeholder="导出为规则上方注释" aria-label="规则备注">' + escapeHtml(rule.remark || '') + '</textarea></td><td><input data-rule-field="category" data-rule-index="' + index + '" value="' + escapeHtml(rule.category) + '"></td><td><input type="checkbox" data-rule-field="noResolve" data-rule-index="' + index + '"' + (rule.noResolve ? ' checked' : '') + (rule.type === 'MATCH' ? ' disabled' : '') + ' aria-label="no-resolve"></td><td class="row-order-actions"><button data-action="move-rule-up" data-index="' + index + '"' + (index === 0 ? ' disabled' : '') + '>上移</button><button data-action="move-rule-down" data-index="' + index + '"' + (index === rules.length - 1 ? ' disabled' : '') + '>下移</button><button class="danger-text" data-action="delete-rule" data-index="' + index + '">删除</button></td></tr>';
-    }).join('');
-    const center = '<section class="editor-panel rules-editor"><div class="panel-header"><div><h2>路由规则</h2><p>启用顺序即最终 YAML 顺序；备注导出为规则上一行注释</p></div><div class="panel-search inline-search"><input id="rule-search" value="' + escapeHtml(state.ruleQuery) + '" placeholder="搜索类型、内容、备注或分类"></div></div><div class="data-table-wrap rules-table-wrap"><table class="data-table rules-table"><thead><tr><th>启用</th><th>类型</th><th>匹配内容 / 提供者</th><th>目标</th><th>备注</th><th>分类</th><th>no-resolve</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+    if (!group) return { left: left, center: '<section class="editor-panel centered-empty"><h2>选择一个策略组</h2><p>选择后可在同一处配置其分流规则与成员来源。</p></section>' };
+    const ruleCount = config.rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length;
+    const center = '<section class="editor-panel group-editor unified-group-editor"><div class="panel-header unified-editor-header"><div><h2>' + escapeHtml(group.name || '未命名策略组') + '</h2><p>稳定 ID：' + escapeHtml(group.id) + ' · ' + ruleCount + ' 条归属规则</p></div><div class="panel-header-actions"><label class="switch-label"><span>已启用</span><input type="checkbox" data-group-field="enabled"' + (group.enabled ? ' checked' : '') + '><span class="switch-control" aria-hidden="true"></span></label><button class="icon-button" data-action="duplicate-group">复制</button><button class="icon-button danger" data-action="delete-group">删除</button></div></div>'
+      + '<div class="unified-group-context"><label class="field"><span>策略组名称</span><input data-group-field="name" value="' + escapeHtml(group.name) + '"></label><label class="field"><span>策略类型</span><select data-group-field="type"><option value="select"' + (group.type === 'select' ? ' selected' : '') + '>手动选择（select）</option><option value="url-test"' + (group.type === 'url-test' ? ' selected' : '') + '>自动测速（url-test）</option><option value="fallback"' + (group.type === 'fallback' ? ' selected' : '') + '>故障转移（fallback）</option><option value="load-balance"' + (group.type === 'load-balance' ? ' selected' : '') + '>负载均衡（load-balance）</option></select></label><label class="field"><span>输出条件</span><select data-group-field="visibility"><option value="always"' + ((group.visibility || 'always') === 'always' ? ' selected' : '') + '>始终输出</option><option value="withSelfNodes"' + (group.visibility === 'withSelfNodes' ? ' selected' : '') + '>仅有自建节点时输出</option></select></label></div>'
+      + '<div class="group-pane-tabs" role="tablist" aria-label="策略组配置区域"><button class="' + (state.groupPane === 'rules' ? 'active' : '') + '" data-action="group-pane" data-pane="rules" role="tab" aria-selected="' + (state.groupPane === 'rules') + '" aria-controls="group-pane-panel" tabindex="' + (state.groupPane === 'rules' ? '0' : '-1') + '">分流规则 <span>' + ruleCount + '</span></button><button class="' + (state.groupPane === 'settings' ? 'active' : '') + '" data-action="group-pane" data-pane="settings" role="tab" aria-selected="' + (state.groupPane === 'settings') + '" aria-controls="group-pane-panel" tabindex="' + (state.groupPane === 'settings' ? '0' : '-1') + '">成员与检测 <span>' + group.sources.length + '</span></button></div>'
+      + '<div class="unified-editor-scroll" id="group-pane-panel" role="tabpanel">' + (state.groupPane === 'rules' ? renderNestedRules(group) : renderGroupSettings(group)) + '</div></section>';
     return { left: left, center: center };
   }
 
@@ -440,11 +509,11 @@ export const consoleClientScript = String.raw`
       const refs = state.routing.config.rules.filter(function (rule) { return rule.enabled && rule.type === 'RULE-SET' && rule.providerId === provider.id; }).length;
       return '<button class="entity-row ' + (state.selectedProviderId === provider.id ? 'active ' : '') + (!provider.enabled ? 'disabled' : '') + '" data-action="select-provider" data-id="' + escapeHtml(provider.id) + '"><span class="entity-copy"><strong>' + escapeHtml(provider.name || '未命名提供者') + '</strong><small>' + escapeHtml(provider.behavior) + ' · ' + refs + ' 条引用</small></span></button>';
     }).join('');
-    const left = '<section class="entity-panel provider-list-panel"><div class="panel-header"><div><h2>规则提供者</h2><p>' + providers.length + ' 个提供者</p></div><button class="icon-button brand" data-action="add-provider">新增</button></div><div class="panel-search"><input id="provider-search" value="' + escapeHtml(state.providerQuery) + '" placeholder="搜索名称或行为"></div><div class="entity-list">' + (rows || '<div class="empty-search">未找到提供者</div>') + '</div></section>';
+    const left = '<section class="entity-panel provider-list-panel"><div class="panel-header"><div><h2>规则提供者</h2><p>' + providers.length + ' 个提供者</p></div><button class="icon-button brand" data-action="add-provider">新增</button></div><div class="panel-search"><input id="provider-search" value="' + escapeHtml(state.providerQuery) + '" placeholder="搜索名称或行为" aria-label="搜索规则提供者"></div><div class="entity-list">' + (rows || '<div class="empty-search">未找到提供者</div>') + '</div></section>';
     const provider = providers.find(function (item) { return item.id === state.selectedProviderId; });
     if (!provider) return { left: left, center: '<section class="editor-panel centered-empty"><h2>选择规则提供者</h2></section>' };
     const refs = state.routing.config.rules.filter(function (rule) { return rule.enabled && rule.type === 'RULE-SET' && rule.providerId === provider.id; });
-    const center = '<section class="editor-panel provider-editor"><div class="panel-header"><div><h2>编辑规则提供者</h2><p>' + refs.length + ' 条启用规则引用</p></div><div class="panel-header-actions"><label class="switch-label"><span>已启用</span><input type="checkbox" data-provider-field="enabled"' + (provider.enabled ? ' checked' : '') + '></label><button class="icon-button danger" data-action="delete-provider">删除</button></div></div><div class="editor-scroll"><section class="form-section first-section"><div class="form-grid two-columns"><label class="field"><span>名称</span><input data-provider-field="name" value="' + escapeHtml(provider.name) + '"></label><label class="field"><span>行为模式</span><select data-provider-field="behavior"><option value="classical"' + (provider.behavior === 'classical' ? ' selected' : '') + '>classical</option><option value="domain"' + (provider.behavior === 'domain' ? ' selected' : '') + '>domain</option><option value="ipcidr"' + (provider.behavior === 'ipcidr' ? ' selected' : '') + '>ipcidr</option></select></label></div><label class="field"><span>下载地址</span><input data-provider-field="url" value="' + escapeHtml(provider.url) + '"></label><div class="form-grid two-columns"><label class="field"><span>更新间隔（秒）</span><input type="number" min="1" data-provider-field="interval" value="' + escapeHtml(provider.interval) + '"></label><label class="field"><span>生成路径</span><input data-provider-field="path" value="' + escapeHtml(provider.path) + '"></label></div></section></div></section>';
+    const center = '<section class="editor-panel provider-editor"><div class="panel-header"><div><h2>编辑规则提供者</h2><p>' + refs.length + ' 条启用规则引用</p></div><div class="panel-header-actions"><label class="switch-label"><span>已启用</span><input type="checkbox" data-provider-field="enabled"' + (provider.enabled ? ' checked' : '') + '><span class="switch-control" aria-hidden="true"></span></label><button class="icon-button danger" data-action="delete-provider">删除</button></div></div><div class="editor-scroll"><section class="form-section first-section"><div class="form-grid two-columns"><label class="field"><span>名称</span><input data-provider-field="name" value="' + escapeHtml(provider.name) + '"></label><label class="field"><span>行为模式</span><select data-provider-field="behavior"><option value="classical"' + (provider.behavior === 'classical' ? ' selected' : '') + '>classical</option><option value="domain"' + (provider.behavior === 'domain' ? ' selected' : '') + '>domain</option><option value="ipcidr"' + (provider.behavior === 'ipcidr' ? ' selected' : '') + '>ipcidr</option></select></label></div><label class="field"><span>下载地址</span><input data-provider-field="url" value="' + escapeHtml(provider.url) + '"></label><div class="form-grid two-columns"><label class="field"><span>更新间隔（秒）</span><input type="number" min="1" data-provider-field="interval" value="' + escapeHtml(provider.interval) + '"></label><label class="field"><span>生成路径</span><input data-provider-field="path" value="' + escapeHtml(provider.path) + '"></label></div></section></div></section>';
     return { left: left, center: center };
   }
 
@@ -470,13 +539,18 @@ export const consoleClientScript = String.raw`
   function renderBaseYamlWorkspace() {
     const text = state.routing.config.baseYaml || '';
     const outline = analyzeYamlOutline(text);
+    const managedConflicts = outline.filter(function (item) { return MANAGED_YAML_KEYS.indexOf(item.key) >= 0; });
     const outlineRows = outline.map(function (item) {
       const conflict = MANAGED_YAML_KEYS.indexOf(item.key) >= 0;
       return '<button class="outline-row ' + (conflict ? 'conflict' : '') + '" data-action="locate-yaml" data-line="' + item.line + '"><span>' + escapeHtml(item.key) + '</span><small>第 ' + item.line + ' 行</small></button>';
     }).join('');
     const lines = text.split('\n').map(function (_, index) { return '<span>' + (index + 1) + '</span>'; }).join('');
     const left = '<section class="entity-panel yaml-outline-panel"><div class="panel-header"><div><h2>顶级字段</h2><p>' + outline.length + ' 个字段</p></div></div><div class="outline-list">' + (outlineRows || '<div class="empty-search">空 Mapping</div>') + '</div></section>';
-    const center = '<section class="editor-panel base-yaml-editor"><div class="panel-header"><div><h2>YAML 模板</h2><p>仅维护 DNS、TUN、profile 等非受管字段</p></div><div class="panel-header-actions"><button class="button secondary small" data-action="reset-base-yaml">恢复默认</button><button class="button secondary small" data-action="format-base-yaml">整理格式</button><button class="button primary small" data-action="preview-routing">完整输出</button></div></div><div class="code-editor-grid base-code-grid"><div class="yaml-line-rail" id="yaml-line-rail" aria-hidden="true">' + lines + '</div><textarea id="base-yaml-editor" class="base-yaml-textarea" spellcheck="false" aria-label="YAML 模板">' + escapeHtml(text) + '</textarea></div><div class="editor-validation valid"><span>' + text.split('\n').length + ' 行；发布前由服务端检查语法、重复键与受管字段冲突</span></div></section>';
+    const validationClass = managedConflicts.length ? 'invalid' : 'pending';
+    const validationCopy = managedConflicts.length
+      ? '检测到 ' + managedConflicts.length + ' 个受管字段，请移到对应可视化编辑区'
+      : text.split('\n').length + ' 行；保存或发布时由服务端检查语法与重复键';
+    const center = '<section class="editor-panel base-yaml-editor"><div class="panel-header"><div><h2>YAML 模板</h2><p>仅维护 DNS、TUN、profile 等非受管字段</p></div><div class="panel-header-actions"><button class="button secondary small" data-action="reset-base-yaml">恢复默认</button><button class="button secondary small" data-action="format-base-yaml">整理格式</button><button class="button primary small" data-action="preview-routing">完整输出</button></div></div><div class="code-editor-grid base-code-grid"><div class="yaml-line-rail" id="yaml-line-rail" aria-hidden="true">' + lines + '</div><textarea id="base-yaml-editor" class="base-yaml-textarea" spellcheck="false" aria-label="YAML 模板">' + escapeHtml(text) + '</textarea></div><div class="editor-validation ' + validationClass + '"><span>' + validationCopy + '</span></div></section>';
     return { left: left, center: center };
   }
 
@@ -487,39 +561,52 @@ export const consoleClientScript = String.raw`
   function renderInspector() {
     const errors = state.routingIssues.errors || [];
     const warnings = state.routingIssues.warnings || [];
+    const currentSnapshot = JSON.stringify(state.routing.config);
+    const hasValidated = Boolean(state.routingValidatedSnapshot);
+    const isCurrent = hasValidated && state.routingValidatedSnapshot === currentSnapshot;
+    const validationTone = !hasValidated ? 'is-idle' : !isCurrent ? 'is-stale' : errors.length ? 'has-error' : 'is-ready';
+    const validationTitle = !hasValidated ? '尚未校验' : !isCurrent ? '配置已更改' : errors.length ? errors.length + ' 个错误' : '校验已通过';
+    const emptyMessage = !hasValidated ? '修改完成后运行一次校验' : !isCurrent ? '请重新校验后再发布' : '尚无阻断问题';
     const issues = errors.concat(warnings).slice(0, 6).map(function (issue) {
       return '<div class="issue-row ' + (errors.indexOf(issue) >= 0 ? 'error' : 'warning') + '"><div><strong>' + escapeHtml(issue.message) + '</strong><span>' + escapeHtml(issue.path) + '</span></div></div>';
     }).join('');
-    return '<aside class="inspector-panel"><div class="panel-header"><div><h2>配置检查</h2></div><button class="icon-button" data-action="validate-routing">校验</button></div><div class="validation-result ' + (errors.length ? 'has-error' : 'is-ready') + '"><strong>' + (errors.length ? errors.length + ' 个错误' : '可以校验或发布') + '</strong>' + (warnings.length ? '<span>' + warnings.length + ' 个提醒</span>' : '') + '</div><div class="issue-list">' + (issues || '<div class="empty-validation">尚无阻断问题</div>') + '</div><div class="inspector-preview-action"><button class="button preview-button" data-action="preview-routing">预览完整 YAML</button></div></aside>';
+    return '<aside class="inspector-panel"><div class="panel-header"><div><h2>配置检查</h2></div><button class="icon-button" data-action="validate-routing">校验</button></div><div class="validation-result ' + validationTone + '"><strong>' + validationTitle + '</strong>' + (isCurrent && warnings.length ? '<span>' + warnings.length + ' 个提醒</span>' : '') + '</div><div class="issue-list">' + (isCurrent && issues ? issues : '<div class="empty-validation">' + emptyMessage + '</div>') + '</div><div class="inspector-preview-action"><button class="button preview-button" data-action="preview-routing">预览完整 YAML</button></div></aside>';
   }
 
   /**
-   * 渲染路由配置四个页签及页面级草稿/发布操作。
+   * 渲染路由配置三个页签及页面级草稿/发布操作。
+   *
+   * 路由规则已并入策略组详情，不再作为独立页签，避免用户在两个模块之间
+   * 来回切换并重复选择目标策略组。
    * @returns {string} 路由配置页面 HTML。
    */
   function renderRoutingPage() {
     if (!state.routing) return '<div class="loading-screen">正在加载路由配置…</div>';
     const dirty = JSON.stringify(state.routing.config) !== state.routingBaseline;
     const status = dirty ? '有未保存更改' : state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : (state.routing.migrated ? '迁移草稿待检查' : '草稿已保存');
-    const actions = '<button class="button ghost" data-action="import-routing">导入 YAML</button><button class="button secondary" data-action="validate-routing" data-busy-key="routingValidate">校验</button><button class="button secondary" data-action="save-routing" data-busy-key="routingSave"' + (!dirty && !state.routing.migrated ? ' disabled' : '') + '>保存草稿</button><button class="button primary" data-action="publish-routing" data-busy-key="routingPublish">发布</button>';
+    const actions = '<button class="button ghost" data-action="import-routing">导入 YAML</button><button class="button secondary" data-action="preview-routing">完整输出</button><button class="button secondary" data-action="validate-routing" data-busy-key="routingValidate">校验</button><button class="button secondary" data-action="save-routing" data-busy-key="routingSave"' + (!dirty && !state.routing.migrated ? ' disabled' : '') + '>保存草稿</button><button class="button primary" data-action="publish-routing" data-busy-key="routingPublish">发布</button>';
     const counts = { groups: state.routing.config.groups.length, rules: state.routing.config.rules.length, providers: state.routing.config.providers.length };
     const tabs = [
-      ['groups', '策略组', counts.groups], ['rules', '路由规则', counts.rules], ['providers', '规则提供者', counts.providers], ['base', 'YAML 模板', null]
-    ].map(function (tab) { return '<button class="studio-tab ' + (state.routingTab === tab[0] ? 'active' : '') + '" data-action="routing-tab" data-tab="' + tab[0] + '"><span>' + tab[1] + '</span>' + (tab[2] == null ? '' : '<small class="tab-count">' + tab[2] + '</small>') + '</button>'; }).join('');
+      ['groups', '策略组与分流', counts.groups], ['providers', '规则提供者', counts.providers], ['base', 'YAML 模板', null]
+    ].map(function (tab) { return '<button class="studio-tab ' + (state.routingTab === tab[0] ? 'active' : '') + '" data-action="routing-tab" data-tab="' + tab[0] + '" role="tab" aria-selected="' + (state.routingTab === tab[0]) + '" aria-controls="routing-tab-panel" tabindex="' + (state.routingTab === tab[0] ? '0' : '-1') + '"><span>' + tab[1] + '</span>' + (tab[2] == null ? '' : '<small class="tab-count">' + tab[2] + '</small>') + '</button>'; }).join('');
     let content;
     if (state.routingTab === 'groups') content = renderGroupsWorkspace();
-    else if (state.routingTab === 'rules') content = renderRulesWorkspace();
     else if (state.routingTab === 'providers') content = renderProvidersWorkspace();
     else content = renderBaseYamlWorkspace();
     return pageHeader('路由配置', status, dirty ? 'dirty' : 'saved', actions)
-      + '<div class="studio-tabs" role="tablist">' + tabs + '</div><div class="studio-content"><div class="studio-grid ' + (state.routingTab === 'base' ? 'base-studio-grid' : '') + '">' + content.left + content.center + (state.routingTab === 'base' ? '' : renderInspector()) + '</div></div>';
+      + '<div class="studio-tabs" role="tablist" aria-label="路由配置区域">' + tabs + '</div><div class="studio-content" id="routing-tab-panel" role="tabpanel"><div class="studio-grid ' + (state.routingTab === 'base' ? 'base-studio-grid' : '') + '">' + content.left + content.center + (state.routingTab === 'base' ? '' : renderInspector()) + '</div></div>';
   }
 
   /**
    * 根据当前 Hash 渲染页面并同步侧栏选中状态。
    */
   function render() {
-    document.querySelectorAll('[data-nav]').forEach(function (item) { item.classList.toggle('active', item.getAttribute('data-nav') === state.activeNav); });
+    document.querySelectorAll('[data-nav]').forEach(function (item) {
+      const active = item.getAttribute('data-nav') === state.activeNav;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
     if (state.activeNav === 'subscriptions') workspace.innerHTML = renderSubscriptionsPage();
     else if (state.activeNav === 'nodes') workspace.innerHTML = renderNodesPage();
     else if (state.activeNav === 'routing') workspace.innerHTML = renderRoutingPage();
@@ -555,6 +642,127 @@ export const consoleClientScript = String.raw`
   }
 
   /**
+   * 创建一条归属于指定目标策略的默认分流规则。
+   *
+   * @param {string} targetGroupId 策略组稳定 ID 或内置目标。
+   * @param {string} category 管理端分类。
+   * @returns {object} 尚未插入配置数组的路由规则。
+   */
+  function createDefaultRoutingRule(targetGroupId, category) {
+    return {
+      id: createId('rule'),
+      enabled: true,
+      category: category || 'general',
+      remark: '',
+      type: 'DOMAIN-SUFFIX',
+      value: 'example.com',
+      targetGroupId: targetGroupId,
+      noResolve: false,
+    };
+  }
+
+  /**
+   * 在当前策略组最后一条归属规则之后添加新规则。
+   *
+   * 启用的 MATCH 永远保持在新规则之后，防止一次快捷操作立即制造无效顺序。
+   * @returns {void}
+   */
+  function addRuleToCurrentGroup() {
+    const rules = state.routing.config.rules;
+    const selectedGroup = state.routing.config.groups.find(function (group) { return group.id === state.selectedGroupId; });
+    const fallbackGroup = state.routing.config.groups.find(function (group) { return group.enabled; });
+    const targetGroupId = selectedGroup ? selectedGroup.id : fallbackGroup ? fallbackGroup.id : 'builtin:DIRECT';
+    const groupIndexes = rules.map(function (rule, index) { return rule.targetGroupId === targetGroupId ? index : -1; }).filter(function (index) { return index >= 0; });
+    const matchIndex = rules.findIndex(function (rule) { return rule.enabled && rule.type === 'MATCH'; });
+    let insertIndex = groupIndexes.length ? groupIndexes[groupIndexes.length - 1] + 1 : (matchIndex >= 0 ? matchIndex : rules.length);
+    if (matchIndex >= 0) insertIndex = Math.min(insertIndex, matchIndex);
+    const rule = createDefaultRoutingRule(targetGroupId, 'general');
+    rules.splice(insertIndex, 0, rule);
+    state.selectedRuleId = rule.id;
+    state.groupPane = 'rules';
+    render();
+    showToast('已添加分流规则', 'success', selectedGroup ? '目标自动设置为“' + selectedGroup.name + '”' : '已放在最终 MATCH 之前');
+  }
+
+  /**
+   * 在锚点规则的上方或下方插入一条新规则。
+   *
+   * 组内视图继承当前策略组，全局视图继承锚点目标；在 MATCH 下方插入时
+   * 自动改为 MATCH 上方，确保最终兜底仍位于启用规则末尾。
+   * @param {string} ruleId 锚点规则 ID。
+   * @param {'above'|'below'} position 插入方向。
+   * @returns {void}
+   */
+  function insertAdjacentRoutingRule(ruleId, position) {
+    const rules = state.routing.config.rules;
+    const anchorIndex = rules.findIndex(function (rule) { return rule.id === ruleId; });
+    if (anchorIndex < 0) return;
+    const anchor = rules[anchorIndex];
+    const targetGroupId = state.groupRuleScope === 'group' ? state.selectedGroupId : anchor.targetGroupId;
+    const rule = createDefaultRoutingRule(targetGroupId, anchor.category || 'general');
+    const insertIndex = anchor.type === 'MATCH' ? anchorIndex : anchorIndex + (position === 'below' ? 1 : 0);
+    rules.splice(insertIndex, 0, rule);
+    state.selectedRuleId = rule.id;
+    render();
+    showToast(position === 'above' ? '已在上方插入规则' : '已在下方插入规则', 'success', '目标策略已自动继承');
+  }
+
+  /**
+   * 复制一条非 MATCH 规则，并把副本紧邻原记录插入。
+   *
+   * @param {string} ruleId 原规则 ID。
+   * @returns {void}
+   */
+  function duplicateRoutingRule(ruleId) {
+    const rules = state.routing.config.rules;
+    const sourceIndex = rules.findIndex(function (rule) { return rule.id === ruleId; });
+    if (sourceIndex < 0) return;
+    const source = rules[sourceIndex];
+    if (source.type === 'MATCH') {
+      showToast('最终 MATCH 不能复制', 'warning', '配置只能保留一个最终兜底规则');
+      return;
+    }
+    const copy = clone(source);
+    copy.id = createId('rule');
+    copy.remark = source.remark ? source.remark + '（副本）' : '';
+    rules.splice(sourceIndex + 1, 0, copy);
+    state.selectedRuleId = copy.id;
+    render();
+    showToast('规则已复制', 'success', '副本已插入原记录下方');
+  }
+
+  /**
+   * 按当前显示范围移动规则。
+   *
+   * 组内范围仅交换同一目标策略组所占的顺序槽位，避免隐藏的其它策略组
+   * 规则被意外改序；全局范围则交换真实相邻记录。
+   * @param {string} ruleId 待移动规则 ID。
+   * @param {-1|1} delta 移动方向。
+   * @returns {void}
+   */
+  function moveRoutingRuleInScope(ruleId, delta) {
+    const rules = state.routing.config.rules;
+    const sourceIndex = rules.findIndex(function (rule) { return rule.id === ruleId; });
+    if (sourceIndex < 0) return;
+    const candidateIndexes = state.groupRuleScope === 'global'
+      ? rules.map(function (_, index) { return index; })
+      : rules.map(function (rule, index) { return rule.targetGroupId === state.selectedGroupId ? index : -1; }).filter(function (index) { return index >= 0; });
+    const slotIndex = candidateIndexes.indexOf(sourceIndex);
+    const targetIndex = candidateIndexes[slotIndex + delta];
+    if (targetIndex == null) return;
+    const sourceRule = rules[sourceIndex];
+    const targetRule = rules[targetIndex];
+    if ((sourceRule.enabled && sourceRule.type === 'MATCH' && delta < 0) || (targetRule.enabled && targetRule.type === 'MATCH' && delta > 0)) {
+      showToast('最终 MATCH 必须保持在末尾', 'warning', '请在 MATCH 上方调整其它规则');
+      return;
+    }
+    const temporary = rules[sourceIndex];
+    rules[sourceIndex] = rules[targetIndex];
+    rules[targetIndex] = temporary;
+    render();
+  }
+
+  /**
    * 复制文本并提供成功或失败反馈。
    * @param {string} text 待复制文本。
    * @param {string} label 反馈对象名称。
@@ -576,6 +784,8 @@ export const consoleClientScript = String.raw`
    * @param {Function} onConfirm 确认回调；返回 false 时保持弹窗。
    */
   function openModal(title, body, primaryLabel, onConfirm) {
+    overlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlayNeedsRender = false;
     overlayRoot.innerHTML = '<div class="modal-backdrop" data-action="close-overlay"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-header"><h2 id="modal-title">' + escapeHtml(title) + '</h2><button class="icon-button" data-action="close-overlay" aria-label="关闭">关闭</button></div><div class="modal-body">' + body + '</div><div class="modal-footer"><button class="button ghost" data-action="close-overlay">取消</button><button class="button primary" id="modal-confirm">' + escapeHtml(primaryLabel) + '</button></div></section></div>';
     const card = overlayRoot.querySelector('.modal-card');
     card.addEventListener('click', function (event) { event.stopPropagation(); });
@@ -588,9 +798,26 @@ export const consoleClientScript = String.raw`
     if (focusable) focusable.focus();
   }
 
-  /** 关闭当前模态框或 YAML 预览抽屉。 */
+  /**
+   * 关闭当前模态框或 YAML 预览抽屉，并恢复触发控件焦点。
+   *
+   * 完整预览会更新节点匹配摘要，因此仅在该场景关闭时重绘后台页面；
+   * 普通弹窗关闭不会重绘，避免打断尚未提交的表单输入。
+   */
   function closeOverlay() {
+    const returnFocus = overlayReturnFocus;
+    const returnAction = returnFocus && returnFocus.getAttribute ? returnFocus.getAttribute('data-action') : '';
+    const shouldRender = overlayNeedsRender;
+    state.previewRequestId += 1;
     overlayRoot.innerHTML = '';
+    overlayReturnFocus = null;
+    overlayNeedsRender = false;
+    if (shouldRender) render();
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    else if (returnAction) {
+      const replacement = workspace.querySelector('[data-action="' + returnAction + '"]');
+      if (replacement) replacement.focus();
+    }
   }
 
   /**
@@ -603,11 +830,13 @@ export const consoleClientScript = String.raw`
     try {
       const result = await api('/api/routing-config/validate', { method: 'POST', body: JSON.stringify({ config: state.routing.config }) });
       state.routingIssues = result;
+      state.routingValidatedSnapshot = JSON.stringify(state.routing.config);
       render();
       if (!quiet) showToast(result.valid ? '配置校验通过' : '配置校验未通过', result.valid ? 'success' : 'error', result.valid ? (result.warnings.length + ' 个提醒') : (result.errors.length + ' 个错误'));
       return Boolean(result.valid);
     } catch (error) {
       state.routingIssues = { errors: error.errors || [{ path: '', message: error.message }], warnings: [] };
+      state.routingValidatedSnapshot = JSON.stringify(state.routing.config);
       render();
       if (!quiet) showToast('校验失败', 'error', error.message);
       return false;
@@ -641,6 +870,7 @@ export const consoleClientScript = String.raw`
       state.routing.updatedAt = data.updatedAt;
       state.routingBaseline = JSON.stringify(state.routing.config);
       state.routingIssues = data.validation || { errors: [], warnings: [] };
+      state.routingValidatedSnapshot = JSON.stringify(state.routing.config);
       render();
       showToast('修订 ' + data.revision + ' 已发布', 'success', '两类订阅缓存已清理');
     } catch (error) {
@@ -657,7 +887,9 @@ export const consoleClientScript = String.raw`
    * 打开完整 YAML 抽屉，并根据客户端和订阅类型实时请求真实节点预览。
    */
   function openPreviewDrawer() {
-    overlayRoot.innerHTML = '<div class="drawer-backdrop"><aside class="yaml-drawer" role="dialog" aria-modal="true" aria-labelledby="preview-title"><div class="drawer-header"><div><h2 id="preview-title">完整输出</h2><p>使用当前草稿和真实节点，预览不会写 KV 或缓存</p></div><button class="icon-button" data-action="close-preview">关闭</button></div><div class="preview-controls"><label>客户端<select id="preview-client"><option value="normal">通用</option><option value="stash">Stash</option></select></label><label>订阅类型<select id="preview-output"><option value="monthly">包年/包月</option><option value="trafficPackage">流量包</option></select></label><button class="button secondary" id="refresh-preview">生成预览</button><button class="button primary" id="copy-preview" disabled>复制 YAML</button></div><pre class="yaml-preview" id="yaml-preview">正在生成真实预览…</pre></aside></div>';
+    overlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlayNeedsRender = false;
+    overlayRoot.innerHTML = '<div class="drawer-backdrop"><aside class="yaml-drawer" role="dialog" aria-modal="true" aria-labelledby="preview-title" aria-describedby="preview-description"><div class="drawer-header"><div><h2 id="preview-title">完整输出</h2><p id="preview-description">使用当前草稿和真实节点，预览不会写 KV 或缓存</p></div><button class="icon-button" data-action="close-preview" aria-label="关闭完整输出预览">关闭</button></div><div class="preview-controls"><label><span>客户端</span><select id="preview-client"><option value="normal">通用</option><option value="stash">Stash</option></select></label><label><span>订阅类型</span><select id="preview-output"><option value="monthly">包年/包月</option><option value="trafficPackage">流量包</option></select></label><button class="button secondary" id="refresh-preview">生成预览</button><button class="button primary" id="copy-preview" disabled>复制 YAML</button></div><div class="yaml-preview-meta"><span id="preview-status" role="status" aria-live="polite">准备生成预览…</span><span>可纵向与横向滚动查看</span></div><pre class="yaml-preview" id="yaml-preview" tabindex="0" aria-label="完整 YAML 内容" aria-busy="true">正在生成真实预览…</pre></aside></div>';
     overlayRoot.querySelector('[data-action="close-preview"]').addEventListener('click', closeOverlay);
     overlayRoot.querySelector('.drawer-backdrop').addEventListener('click', closeOverlay);
     overlayRoot.querySelector('.yaml-drawer').addEventListener('click', function (event) { event.stopPropagation(); });
@@ -665,6 +897,7 @@ export const consoleClientScript = String.raw`
     document.getElementById('preview-client').addEventListener('change', refreshPreview);
     document.getElementById('preview-output').addEventListener('change', refreshPreview);
     document.getElementById('copy-preview').addEventListener('click', function () { copyText(document.getElementById('yaml-preview').textContent, '完整 YAML'); });
+    overlayRoot.querySelector('[data-action="close-preview"]').focus();
     refreshPreview();
   }
 
@@ -672,19 +905,49 @@ export const consoleClientScript = String.raw`
    * 生成当前抽屉选项对应的 YAML，并把真实节点匹配数量同步回策略组列表。
    */
   async function refreshPreview() {
-    const client = document.getElementById('preview-client').value;
-    const output = document.getElementById('preview-output').value;
+    const clientSelect = document.getElementById('preview-client');
+    const outputSelect = document.getElementById('preview-output');
     const preview = document.getElementById('yaml-preview');
     const copyButton = document.getElementById('copy-preview');
+    const refreshButton = document.getElementById('refresh-preview');
+    const status = document.getElementById('preview-status');
+    if (!clientSelect || !outputSelect || !preview || !copyButton || !refreshButton || !status) return;
+    const client = clientSelect.value;
+    const output = outputSelect.value;
+    const requestId = ++state.previewRequestId;
     preview.textContent = '正在解析订阅节点并生成预览…';
+    preview.classList.remove('is-error');
+    preview.setAttribute('aria-busy', 'true');
+    preview.removeAttribute('role');
+    status.textContent = '正在解析订阅并生成真实预览…';
     copyButton.disabled = true;
+    refreshButton.disabled = true;
+    refreshButton.setAttribute('aria-busy', 'true');
+    refreshButton.textContent = '生成中…';
     try {
       const data = await api('/api/routing-config/preview', { method: 'POST', body: JSON.stringify({ config: state.routing.config, client: client, output: output }) });
+      if (requestId !== state.previewRequestId || !overlayRoot.contains(preview)) return;
       preview.textContent = data.yaml;
+      preview.setAttribute('aria-busy', 'false');
       copyButton.disabled = false;
+      status.textContent = '已生成 ' + data.yaml.split('\n').length + ' 行 YAML';
       state.routingPreviews = {};
       (data.previews || []).forEach(function (item) { state.routingPreviews[item.groupId] = item; });
-    } catch (error) { preview.textContent = '# 预览生成失败\n' + error.message; }
+      overlayNeedsRender = true;
+    } catch (error) {
+      if (requestId !== state.previewRequestId || !overlayRoot.contains(preview)) return;
+      preview.textContent = '# 预览生成失败\n' + error.message;
+      preview.classList.add('is-error');
+      preview.setAttribute('role', 'alert');
+      preview.setAttribute('aria-busy', 'false');
+      status.textContent = '预览生成失败，请检查错误详情';
+    } finally {
+      if (requestId === state.previewRequestId && overlayRoot.contains(refreshButton)) {
+        refreshButton.disabled = false;
+        refreshButton.removeAttribute('aria-busy');
+        refreshButton.textContent = '重新生成';
+      }
+    }
   }
 
   /**
@@ -696,9 +959,7 @@ export const consoleClientScript = String.raw`
     if (countBadge) countBadge.textContent = String(analysis.nodes.length);
     const list = document.querySelector('.parsed-node-list');
     if (list) {
-      list.innerHTML = analysis.nodes.map(function (node, index) {
-        return '<div class="parsed-node-row"><span class="node-protocol">' + escapeHtml(String(node.type || '?').toUpperCase()) + '</span><div><strong>' + escapeHtml(node.name || ('未命名节点 ' + (index + 1))) + '</strong><span>' + escapeHtml(node.server || '—') + (node.port ? ':' + escapeHtml(node.port) : '') + '</span></div></div>';
-      }).join('') || '<div class="empty-list">暂无可显示节点</div>';
+      list.innerHTML = analysis.nodes.map(renderParsedNodeRow).join('') || '<div class="empty-list">' + (analysis.valid ? '暂无可显示节点' : 'JSON 无效，修复后恢复节点预览') + '</div>';
     }
     const validation = document.querySelector('.editor-validation');
     if (validation) {
@@ -715,10 +976,18 @@ export const consoleClientScript = String.raw`
    * 更新 YAML 大纲与行号，不重建编辑器输入。
    */
   function updateYamlLiveView() {
+    const items = analyzeYamlOutline(state.routing.config.baseYaml);
     const outline = document.querySelector('.outline-list');
     if (outline) {
-      const items = analyzeYamlOutline(state.routing.config.baseYaml);
       outline.innerHTML = items.map(function (item) { return '<button class="outline-row ' + (MANAGED_YAML_KEYS.indexOf(item.key) >= 0 ? 'conflict' : '') + '" data-action="locate-yaml" data-line="' + item.line + '"><span>' + escapeHtml(item.key) + '</span><small>第 ' + item.line + ' 行</small></button>'; }).join('') || '<div class="empty-search">空 Mapping</div>';
+    }
+    const conflicts = items.filter(function (item) { return MANAGED_YAML_KEYS.indexOf(item.key) >= 0; });
+    const validation = document.querySelector('.base-yaml-editor .editor-validation');
+    if (validation) {
+      validation.className = 'editor-validation ' + (conflicts.length ? 'invalid' : 'pending');
+      validation.textContent = conflicts.length
+        ? '检测到 ' + conflicts.length + ' 个受管字段，请移到对应可视化编辑区'
+        : state.routing.config.baseYaml.split('\n').length + ' 行；保存或发布时由服务端检查语法与重复键';
     }
     const rail = document.getElementById('yaml-line-rail');
     if (rail) rail.innerHTML = state.routing.config.baseYaml.split('\n').map(function (_, index) { return '<span>' + (index + 1) + '</span>'; }).join('');
@@ -749,7 +1018,7 @@ export const consoleClientScript = String.raw`
     }
     const saveSelector = state.activeNav === 'subscriptions' ? '[data-action="save-subscriptions"]' : state.activeNav === 'routing' ? '[data-action="save-routing"]' : '';
     const save = saveSelector ? document.querySelector(saveSelector) : null;
-    if (save && dirty) save.disabled = false;
+    if (save) save.disabled = !dirty && !(state.activeNav === 'routing' && state.routing && state.routing.migrated);
   }
 
   /**
@@ -772,9 +1041,19 @@ export const consoleClientScript = String.raw`
       updateSelfNodesLiveView();
       return;
     }
-    if (target.id === 'group-search') { state.groupQuery = target.value; return; }
-    if (target.id === 'rule-search') { state.ruleQuery = target.value; return; }
-    if (target.id === 'provider-search') { state.providerQuery = target.value; return; }
+    if (['group-search', 'rule-search', 'provider-search'].includes(target.id)) {
+      const stateKey = target.id === 'group-search' ? 'groupQuery' : target.id === 'rule-search' ? 'ruleQuery' : 'providerQuery';
+      const selectionStart = target.selectionStart;
+      const selectionEnd = target.selectionEnd;
+      state[stateKey] = target.value;
+      render();
+      const replacement = document.getElementById(target.id);
+      if (replacement) {
+        replacement.focus();
+        if (selectionStart != null && selectionEnd != null) replacement.setSelectionRange(selectionStart, selectionEnd);
+      }
+      return;
+    }
     if (target.id === 'base-yaml-editor') {
       state.routing.config.baseYaml = target.value;
       updateYamlLiveView();
@@ -837,7 +1116,6 @@ export const consoleClientScript = String.raw`
     }
     handleWorkspaceInput(event);
     updateDirtyIndicator();
-    if (['group-search', 'rule-search', 'provider-search'].includes(target.id)) render();
     if (groupField === 'type') {
       const group = state.routing.config.groups.find(function (item) { return item.id === state.selectedGroupId; });
       if (group.type === 'select') delete group.healthCheck;
@@ -870,7 +1148,13 @@ export const consoleClientScript = String.raw`
       const index = Number(button.getAttribute('data-index'));
       openModal('删除订阅源', '<p class="confirm-copy">确定删除“' + escapeHtml(state.subscriptions[index].subName || '未命名订阅源') + '”吗？</p>', '删除', function () { state.subscriptions.splice(index, 1); render(); return true; });
     } else if (action === 'save-subscriptions') {
-      if (!validateSubscriptions()) { render(); showToast('请修正订阅源字段', 'error'); return; }
+      if (!validateSubscriptions()) {
+        render();
+        const firstInvalidField = workspace.querySelector('[aria-invalid="true"]');
+        if (firstInvalidField) firstInvalidField.focus();
+        showToast('请修正订阅源字段', 'error');
+        return;
+      }
       setBusy('subscriptions', true);
       try {
         const data = await api('/api/subscriptions', { method: 'PUT', body: JSON.stringify({ subscriptions: state.subscriptions }) });
@@ -889,6 +1173,8 @@ export const consoleClientScript = String.raw`
           }
         });
         render();
+        const firstInvalidField = workspace.querySelector('[aria-invalid="true"]');
+        if (firstInvalidField) firstInvalidField.focus();
         showToast('订阅源保存失败', 'error', error.message);
       } finally { setBusy('subscriptions', false); }
     } else if (action === 'format-self-nodes') {
@@ -915,6 +1201,28 @@ export const consoleClientScript = String.raw`
       render();
     } else if (action === 'select-group') {
       state.selectedGroupId = button.getAttribute('data-id');
+      state.groupPane = 'rules';
+      state.groupRuleScope = 'group';
+      state.ruleQuery = '';
+      const firstRule = state.routing.config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+      state.selectedRuleId = firstRule ? firstRule.id : '';
+      render();
+      const selectedGroupButton = workspace.querySelector('[data-action="select-group"][data-id="' + state.selectedGroupId + '"]');
+      if (selectedGroupButton) selectedGroupButton.focus();
+    } else if (action === 'group-pane') {
+      state.groupPane = button.getAttribute('data-pane');
+      render();
+    } else if (action === 'group-rule-scope') {
+      state.groupRuleScope = button.getAttribute('data-scope');
+      const scopeRules = state.groupRuleScope === 'global'
+        ? state.routing.config.rules
+        : state.routing.config.rules.filter(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+      if (!scopeRules.some(function (rule) { return rule.id === state.selectedRuleId; })) {
+        state.selectedRuleId = scopeRules[0] ? scopeRules[0].id : '';
+      }
+      render();
+    } else if (action === 'select-rule') {
+      state.selectedRuleId = button.getAttribute('data-id');
       render();
     } else if (action === 'move-group-up' || action === 'move-group-down') {
       moveItem(state.routing.config.groups, Number(button.getAttribute('data-index')), action === 'move-group-up' ? -1 : 1);
@@ -923,6 +1231,9 @@ export const consoleClientScript = String.raw`
       const id = createId('group');
       state.routing.config.groups.push({ id: id, name: '新策略组', type: 'select', enabled: true, visibility: 'always', sources: [{ id: createId('source'), kind: 'builtin', value: 'DIRECT', appliesTo: 'all', when: 'always' }] });
       state.selectedGroupId = id;
+      state.selectedRuleId = '';
+      state.groupPane = 'rules';
+      state.groupRuleScope = 'group';
       render();
     } else if (action === 'duplicate-group') {
       const source = state.routing.config.groups.find(function (group) { return group.id === state.selectedGroupId; });
@@ -932,6 +1243,9 @@ export const consoleClientScript = String.raw`
       copy.sources.forEach(function (item) { item.id = createId('source'); });
       state.routing.config.groups.splice(state.routing.config.groups.indexOf(source) + 1, 0, copy);
       state.selectedGroupId = copy.id;
+      state.selectedRuleId = '';
+      state.groupPane = 'rules';
+      state.groupRuleScope = 'group';
       render();
     } else if (action === 'delete-group') {
       const group = state.routing.config.groups.find(function (item) { return item.id === state.selectedGroupId; });
@@ -941,10 +1255,12 @@ export const consoleClientScript = String.raw`
         showToast('无法删除被引用的策略组', 'error', ruleRefs.length + ' 条规则、' + groupRefs.length + ' 个策略组仍在引用');
       } else {
         openModal('删除策略组', '<p class="confirm-copy">确定删除“' + escapeHtml(group.name) + '”吗？</p>', '删除', function () {
-          const index = state.routing.config.groups.indexOf(group);
-          state.routing.config.groups.splice(index, 1);
-          state.selectedGroupId = state.routing.config.groups[0] ? state.routing.config.groups[0].id : '';
-          render();
+           const index = state.routing.config.groups.indexOf(group);
+           state.routing.config.groups.splice(index, 1);
+           state.selectedGroupId = state.routing.config.groups[0] ? state.routing.config.groups[0].id : '';
+           const nextRule = state.routing.config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+           state.selectedRuleId = nextRule ? nextRule.id : '';
+           render();
           return true;
         });
       }
@@ -966,18 +1282,24 @@ export const consoleClientScript = String.raw`
       const group = state.routing.config.groups.find(function (item) { return item.id === state.selectedGroupId; });
       moveItem(group.sources, Number(button.getAttribute('data-index')), action === 'move-source-up' ? -1 : 1);
       render();
-    } else if (action === 'select-rule-category') {
-      state.ruleCategory = button.getAttribute('data-category');
-      render();
     } else if (action === 'add-rule') {
-      const matchIndex = state.routing.config.rules.findIndex(function (rule) { return rule.enabled && rule.type === 'MATCH'; });
-      const target = state.routing.config.groups.find(function (group) { return group.enabled; });
-      const rule = { id: createId('rule'), enabled: true, category: state.ruleCategory === 'all' ? 'general' : state.ruleCategory, remark: '', type: 'DOMAIN-SUFFIX', value: 'example.com', targetGroupId: target ? target.id : 'builtin:DIRECT', noResolve: false };
-      state.routing.config.rules.splice(matchIndex < 0 ? state.routing.config.rules.length : matchIndex, 0, rule);
-      render();
+      addRuleToCurrentGroup();
+    } else if (action === 'insert-rule-above' || action === 'insert-rule-below') {
+      insertAdjacentRoutingRule(button.getAttribute('data-id'), action === 'insert-rule-above' ? 'above' : 'below');
+    } else if (action === 'duplicate-rule') {
+      duplicateRoutingRule(button.getAttribute('data-id'));
     } else if (action === 'delete-rule') {
-      state.routing.config.rules.splice(Number(button.getAttribute('data-index')), 1);
+      const index = Number(button.getAttribute('data-index'));
+      const removed = state.routing.config.rules[index];
+      state.routing.config.rules.splice(index, 1);
+      const remainingScopeRules = state.groupRuleScope === 'global'
+        ? state.routing.config.rules
+        : state.routing.config.rules.filter(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+      state.selectedRuleId = remainingScopeRules[0] ? remainingScopeRules[0].id : '';
       render();
+      showToast('规则已删除', 'success', removed ? (removed.remark || removed.value || removed.type) : '');
+    } else if (action === 'move-selected-rule-up' || action === 'move-selected-rule-down') {
+      moveRoutingRuleInScope(button.getAttribute('data-id'), action === 'move-selected-rule-up' ? -1 : 1);
     } else if (action === 'move-rule-up' || action === 'move-rule-down') {
       moveItem(state.routing.config.rules, Number(button.getAttribute('data-index')), action === 'move-rule-up' ? -1 : 1);
       render();
@@ -1032,16 +1354,23 @@ export const consoleClientScript = String.raw`
           const data = await api('/api/routing-config/import', { method: 'POST', body: JSON.stringify({ yaml: text }) });
           state.routing.config = data.config;
           state.selectedGroupId = data.config.groups[0] ? data.config.groups[0].id : '';
+          const firstImportedRule = data.config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+          state.selectedRuleId = firstImportedRule ? firstImportedRule.id : '';
           state.selectedProviderId = data.config.providers[0] ? data.config.providers[0].id : '';
           state.routingTab = 'groups';
+          state.groupPane = 'rules';
+          state.groupRuleScope = 'group';
           state.routingIssues = { errors: [], warnings: [] };
+          state.routingValidatedSnapshot = '';
           state.routingPreviews = {};
           let validationTone = 'success';
           let validationMessage = '请再次检查并发布';
           try {
             state.routingIssues = await api('/api/routing-config/validate', { method: 'POST', body: JSON.stringify({ config: data.config }) });
+            state.routingValidatedSnapshot = JSON.stringify(data.config);
           } catch (validationError) {
             state.routingIssues = { errors: validationError.errors || [{ path: '', message: validationError.message }], warnings: [] };
+            state.routingValidatedSnapshot = JSON.stringify(data.config);
             validationTone = 'warning';
             validationMessage = state.routingIssues.errors.length + ' 个校验问题待处理';
           }
@@ -1065,9 +1394,20 @@ export const consoleClientScript = String.raw`
    */
   function setSidebarOpen(open) {
     const menuButton = document.getElementById('mobile-menu-button');
+    const compact = window.matchMedia('(max-width: 899px)').matches;
+    const shouldHide = compact && !open;
     sidebar.classList.toggle('open', open);
+    sidebar.inert = shouldHide;
+    if (shouldHide) sidebar.setAttribute('aria-hidden', 'true');
+    else sidebar.removeAttribute('aria-hidden');
     menuButton.setAttribute('aria-expanded', String(open));
     menuButton.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
+    if (open) {
+      const current = sidebar.querySelector('[aria-current="page"]');
+      if (current) current.focus();
+    } else if (sidebar.contains(document.activeElement)) {
+      menuButton.focus();
+    }
   }
 
   /**
@@ -1088,6 +1428,32 @@ export const consoleClientScript = String.raw`
   workspace.addEventListener('input', function (event) { handleWorkspaceInput(event); updateDirtyIndicator(); });
   workspace.addEventListener('change', handleWorkspaceChange);
   workspace.addEventListener('click', handleWorkspaceClick);
+  /**
+   * 为路由页主页签和策略组二级页签补齐标准方向键切换。
+   * Home/End 跳到首尾，左右方向键移动一个页签并立即激活。
+   */
+  workspace.addEventListener('keydown', function (event) {
+    const currentTab = event.target.closest('[role="tab"]');
+    if (!currentTab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const tabList = currentTab.closest('[role="tablist"]');
+    if (!tabList) return;
+    const tabs = Array.from(tabList.querySelectorAll('[role="tab"]'));
+    const currentIndex = tabs.indexOf(currentTab);
+    if (currentIndex < 0 || !tabs.length) return;
+    event.preventDefault();
+    let nextIndex = currentIndex;
+    if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else nextIndex = (currentIndex + 1) % tabs.length;
+    const nextTab = tabs[nextIndex];
+    const action = nextTab.getAttribute('data-action');
+    const keyAttribute = nextTab.hasAttribute('data-tab') ? 'data-tab' : 'data-pane';
+    const keyValue = nextTab.getAttribute(keyAttribute);
+    nextTab.click();
+    const replacement = workspace.querySelector('[data-action="' + action + '"][' + keyAttribute + '="' + keyValue + '"]');
+    if (replacement) replacement.focus();
+  });
   document.querySelectorAll('[data-nav]').forEach(function (button) { button.addEventListener('click', function () { navigate(button.getAttribute('data-nav')); }); });
   document.getElementById('mobile-menu-button').addEventListener('click', function () { setSidebarOpen(!sidebar.classList.contains('open')); });
   document.getElementById('sidebar-backdrop').addEventListener('click', function () { setSidebarOpen(false); });
@@ -1113,12 +1479,46 @@ export const consoleClientScript = String.raw`
     event.returnValue = '';
   });
 
-  /** Escape 关闭当前弹窗或抽屉。 */
-  window.addEventListener('keydown', function (event) { if (event.key === 'Escape' && overlayRoot.innerHTML) closeOverlay(); });
+  /**
+   * Escape 关闭当前弹窗；Tab 键则被限制在当前浮层内循环。
+   * 这样键盘用户不会意外移动到遮罩后的表单和导航控件。
+   */
+  window.addEventListener('keydown', function (event) {
+    if (!overlayRoot.innerHTML) {
+      if (event.key === 'Escape' && sidebar.classList.contains('open')) {
+        event.preventDefault();
+        setSidebarOpen(false);
+      }
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeOverlay();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(overlayRoot.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function (element) {
+      return element.getClientRects().length > 0;
+    });
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
 
   const initialHash = window.location.hash.replace('#', '');
   state.activeNav = VALID_NAVS.includes(initialHash) ? initialHash : 'subscriptions';
   if (!initialHash) history.replaceState(null, '', '#subscriptions');
+  setSidebarOpen(false);
   loadApplication();
 })();
 `

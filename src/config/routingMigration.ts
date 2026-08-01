@@ -7,6 +7,7 @@ import type {
   RoutingRuleConfig,
   RuleProviderConfig,
 } from '../types/routing'
+import { createLegacyRuleTarget } from '../utils/routingRuleTarget'
 
 /** 旧版两套环境正则中迁移会读取的字段。 */
 export type LegacyPatternConfig = Record<string, string | undefined>
@@ -39,12 +40,23 @@ const SUPPORTED_RULE_TYPES = new Set([
   'IP-CIDR',
   'RULE-SET',
   'PROCESS-NAME',
+  'PROCESS-NAME-WILDCARD',
   'GEOIP',
   'MATCH',
 ])
 const SUPPORTED_GROUP_FIELDS = new Set(['name', 'type', 'proxies', 'url', 'interval', 'tolerance', 'strategy'])
 const SUPPORTED_PROVIDER_FIELDS = new Set(['type', 'behavior', 'url', 'path', 'interval'])
 const UNSUPPORTED_GROUP_BUILTINS = new Set(['REJECT', 'REJECT-DROP', 'PASS', 'COMPATIBLE'])
+
+/**
+ * 已知的旧策略组名称映射。
+ *
+ * `泰国节点` 在历史版本中与 TAIGUO_PATTERN 配套使用，后续整体重命名为
+ * `EtherFi`/ETHERFI_PATTERN；旧 KV 里的 defaultYaml 可能仍保留原名称。
+ */
+const LEGACY_GROUP_TARGET_ALIASES = new Map<string, string>([
+  ['泰国节点', 'EtherFi'],
+])
 
 /**
  * 将 YAML AST 中不含井号的注释文本规范化为备注字段。
@@ -144,10 +156,16 @@ function createPatternSources(
 ): ProxyMemberSource[] {
   const monthly = env.SUBSCRIBE_PATTERN ?? {}
   const traffic = env.ONETIME_PATTERN ?? {}
-  const monthlyInclude = monthly[`${keyPrefix}_MATCH_PATTERN`] ?? ''
-  const monthlyExclude = monthly[`${keyPrefix}_EXCLUDE_PATTERN`] ?? ''
-  const trafficInclude = traffic[`${keyPrefix}_MATCH_PATTERN`] ?? ''
-  const trafficExclude = traffic[`${keyPrefix}_EXCLUDE_PATTERN`] ?? ''
+  const legacyKeyPrefix = keyPrefix === 'AI' ? 'EXIT' : keyPrefix === 'ETHERFI' ? 'TAIGUO' : keyPrefix
+
+  /** 优先读取新变量名；字段不存在时才回退到旧模板中的历史名称。 */
+  const readPattern = (patterns: LegacyPatternConfig, suffix: 'MATCH_PATTERN' | 'EXCLUDE_PATTERN'): string => (
+    patterns[`${keyPrefix}_${suffix}`] ?? patterns[`${legacyKeyPrefix}_${suffix}`] ?? ''
+  )
+  const monthlyInclude = readPattern(monthly, 'MATCH_PATTERN')
+  const monthlyExclude = readPattern(monthly, 'EXCLUDE_PATTERN')
+  const trafficInclude = readPattern(traffic, 'MATCH_PATTERN')
+  const trafficExclude = readPattern(traffic, 'EXCLUDE_PATTERN')
 
   /** 创建单个筛选来源并显式保存适用输出，顺序就是最终成员合并顺序。 */
   const build = (appliesTo: OutputScope, include: string, exclude: string, order: number): ProxyMemberSource => ({
@@ -340,9 +358,13 @@ function importRule(
   const isMatch = type === 'MATCH'
   const value = isMatch ? undefined : parts[1]
   const targetName = isMatch ? parts[1] : parts[2]
-  const targetGroupId = groupIds.get(targetName) ?? (['DIRECT', 'REJECT'].includes(targetName) ? `builtin:${targetName}` : '')
+  // Clash 允许规则直接指向代理节点。旧版没有单独的数据模型表示这种目标，
+  // 因此用兼容前缀原样保留名称，生成 YAML 时再还原，避免迁移擅自改变路由语义。
+  const targetGroupId = (groupIds.get(targetName)
+    ?? (['DIRECT', 'REJECT'].includes(targetName) ? `builtin:${targetName}` : ''))
+    || (targetName ? createLegacyRuleTarget(targetName) : '')
   if (!targetGroupId) {
-    errors.push({ code: 'RULE_TARGET_UNRESOLVED', path: `rules[${index}]`, message: `规则目标“${targetName || '空'}”没有对应策略组` })
+    errors.push({ code: 'RULE_TARGET_REQUIRED', path: `rules[${index}]`, message: '规则缺少目标策略、策略组或节点名称' })
   }
 
   const providerId = type === 'RULE-SET' ? providerIds.get(value ?? '') : undefined
@@ -507,6 +529,11 @@ export function createLegacyRoutingConfig(defaultYaml: string, env: LegacyMigrat
   const errors: RoutingImportIssue[] = []
   const groups = createLegacyProxyGroups(env)
   const groupIds = new Map(groups.map((group) => [group.name, group.id]))
+  // 历史别名只在旧 KV 迁移中生效，普通完整 YAML 导入仍严格尊重原始节点/组名称。
+  LEGACY_GROUP_TARGET_ALIASES.forEach((currentName, legacyName) => {
+    const currentGroupId = groupIds.get(currentName)
+    if (currentGroupId) groupIds.set(legacyName, currentGroupId)
+  })
   const providers = importProviders(root['rule-providers'], errors)
   const providerIds = new Map(providers.map((provider) => [provider.name, provider.id]))
   const rawRules = Array.isArray(root.rules) ? root.rules : []
