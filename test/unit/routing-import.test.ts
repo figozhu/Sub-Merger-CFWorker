@@ -156,4 +156,36 @@ rules:
       'MATCH,DIRECT',
     ])
   })
+
+  it('保留直接指向 DIRECT 的手写规则，供 UI 兜底分组重新归类', () => {
+    const imported = importRoutingConfigYaml(`
+proxy-groups:
+  - name: 节点选择
+    type: select
+    proxies: [DIRECT]
+rules:
+  - DOMAIN-SUFFIX,starryblu.com,DIRECT,no-resolve
+  - MATCH,节点选择
+`)
+
+    expect(imported.errors).toEqual([])
+    expect(imported.config?.rules[0]).toMatchObject({
+      type: 'DOMAIN-SUFFIX',
+      value: 'starryblu.com',
+      targetGroupId: 'builtin:DIRECT',
+      noResolve: true,
+    })
+
+    const generated = generateRoutingYaml(imported.config!, {
+      subscriptionNodes: [],
+      selfNodes: [],
+      output: 'monthly',
+      client: 'normal',
+      globalExcludePattern: '',
+    }).yaml
+    expect(YAML.parse(generated).rules).toEqual([
+      'DOMAIN-SUFFIX,starryblu.com,DIRECT,no-resolve',
+      'MATCH,节点选择',
+    ])
+  })
 })

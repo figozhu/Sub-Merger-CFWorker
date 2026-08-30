@@ -8,6 +8,8 @@ export const consoleClientScript = String.raw`
 
   const VALID_NAVS = ['subscriptions', 'nodes', 'routing', 'links'];
   const MANAGED_YAML_KEYS = ['proxies', 'proxy-groups', 'rule-providers', 'rules'];
+  /** 仅供 UI 使用的虚拟分组 ID，不会写入路由配置或生成到 Clash YAML。 */
+  const UNASSIGNED_RULES_GROUP_ID = '__ui_unassigned_rules__';
   const workspace = document.getElementById('workspace');
   const overlayRoot = document.getElementById('overlay-root');
   const toastRoot = document.getElementById('toast-root');
@@ -80,6 +82,32 @@ export const consoleClientScript = String.raw`
    */
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  /**
+   * 找出目标没有指向任何真实 proxy-group 的规则。
+   *
+   * 这类规则包括 DIRECT、REJECT、迁移保留的直接节点目标，以及引用了已不存在
+   * 策略组 ID 的异常旧规则。它们会进入 UI 兜底分组，但目标值保持原样，直到用户
+   * 主动把规则改到真实策略组。
+   * @returns {Array<object>} 按最终 YAML 顺序排列的未归组规则。
+   */
+  function getUnassignedRules() {
+    if (!state.routing || !state.routing.config) return [];
+    const groupIds = new Set(state.routing.config.groups.map(function (group) { return group.id; }));
+    return state.routing.config.rules.filter(function (rule) { return !groupIds.has(rule.targetGroupId); });
+  }
+
+  /**
+   * 读取真实策略组或 UI 兜底分组当前包含的规则。
+   *
+   * @param {string} groupId 真实策略组 ID，或未归组规则虚拟 ID。
+   * @returns {Array<object>} 保持全局顺序的规则数组。
+   */
+  function getRulesForGroup(groupId) {
+    if (!state.routing || !state.routing.config) return [];
+    if (groupId === UNASSIGNED_RULES_GROUP_ID) return getUnassignedRules();
+    return state.routing.config.rules.filter(function (rule) { return rule.targetGroupId === groupId; });
   }
 
   /**
@@ -223,8 +251,10 @@ export const consoleClientScript = String.raw`
       state.routing = results[2];
       state.routingBaseline = JSON.stringify(results[2].config);
       state.outputs = results[3].outputs || [];
-      state.selectedGroupId = results[2].config.groups[0] ? results[2].config.groups[0].id : '';
-      const firstGroupRule = results[2].config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+      state.selectedGroupId = results[2].config.groups[0]
+        ? results[2].config.groups[0].id
+        : (getUnassignedRules().length ? UNASSIGNED_RULES_GROUP_ID : '');
+      const firstGroupRule = getRulesForGroup(state.selectedGroupId)[0];
       state.selectedRuleId = firstGroupRule ? firstGroupRule.id : '';
       state.selectedProviderId = results[2].config.providers[0] ? results[2].config.providers[0].id : '';
       render();
@@ -340,6 +370,9 @@ export const consoleClientScript = String.raw`
       if (selected.indexOf('legacy-target:') === 0) {
         const legacyName = selected.slice('legacy-target:'.length) || '未命名节点';
         options.push('<option value="' + escapeHtml(selected) + '" selected>直接节点：' + escapeHtml(legacyName) + '（迁移保留）</option>');
+      } else if (selected && selected !== 'builtin:DIRECT' && selected !== 'builtin:REJECT'
+        && !state.routing.config.groups.some(function (group) { return group.id === selected; })) {
+        options.push('<option value="' + escapeHtml(selected) + '" selected>未知目标：' + escapeHtml(selected) + '（请重新选择）</option>');
       }
     }
     return options.join('');
@@ -429,7 +462,9 @@ export const consoleClientScript = String.raw`
    */
   function renderNestedRules(group) {
     const rules = state.routing.config.rules;
-    const scopedRules = state.groupRuleScope === 'global' ? rules : rules.filter(function (rule) { return rule.targetGroupId === group.id; });
+    const isFallbackGroup = group.id === UNASSIGNED_RULES_GROUP_ID;
+    const groupRules = getRulesForGroup(group.id);
+    const scopedRules = state.groupRuleScope === 'global' ? rules : groupRules;
     const keyword = state.ruleQuery.trim().toLowerCase();
     const visibleRules = scopedRules.filter(function (rule) {
       return !keyword || [rule.type, rule.value, rule.category, rule.remark].join(' ').toLowerCase().indexOf(keyword) >= 0;
@@ -448,10 +483,11 @@ export const consoleClientScript = String.raw`
         : rule.type === 'RULE-SET'
           ? '<select class="nested-rule-value" data-rule-field="providerId" data-rule-index="' + index + '" aria-label="规则提供者">' + providerOptions(rule.providerId) + '</select>'
           : '<input class="nested-rule-value" data-rule-field="value" data-rule-index="' + index + '" value="' + escapeHtml(rule.value || '') + '" aria-label="匹配内容">';
-      const targetControl = state.groupRuleScope === 'global'
+      const showTargetControl = state.groupRuleScope === 'global' || isFallbackGroup;
+      const targetControl = showTargetControl
         ? '<select class="nested-rule-target" data-rule-field="targetGroupId" data-rule-index="' + index + '" aria-label="目标策略">' + groupOptions(rule.targetGroupId, '') + '</select>'
         : '';
-      return '<article class="nested-rule-record ' + (state.selectedRuleId === rule.id ? 'selected ' : '') + (!rule.enabled ? 'disabled' : '') + '"><div class="nested-rule-primary ' + (state.groupRuleScope === 'global' ? 'with-target' : '') + '">'
+      return '<article class="nested-rule-record ' + (state.selectedRuleId === rule.id ? 'selected ' : '') + (!rule.enabled ? 'disabled' : '') + '"><div class="nested-rule-primary ' + (showTargetControl ? 'with-target' : '') + '">'
         + '<button class="rule-order-button" data-action="select-rule" data-id="' + escapeHtml(rule.id) + '" aria-label="选择第 ' + (index + 1) + ' 条规则">#' + String(index + 1).padStart(2, '0') + '</button>'
         + '<label class="nested-rule-enable" title="启用规则"><input type="checkbox" data-rule-field="enabled" data-rule-index="' + index + '"' + (rule.enabled ? ' checked' : '') + ' aria-label="启用规则"></label>'
         + '<select class="nested-rule-type" data-rule-field="type" data-rule-index="' + index + '" aria-label="规则类型">' + ruleTypeOptions(rule.type) + '</select>'
@@ -466,9 +502,20 @@ export const consoleClientScript = String.raw`
         + '<button data-action="move-selected-rule-up" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedScopeIndex <= 0 || selectedIsFinalMatch ? ' disabled' : '') + '>上移</button><button data-action="move-selected-rule-down" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedScopeIndex < 0 || selectedScopeIndex >= scopedRules.length - 1 || moveDownWouldCrossMatch ? ' disabled' : '') + '>下移</button>'
         + '<button class="danger" data-action="delete-rule" data-index="' + selectedGlobalIndex + '">删除</button></div></div>'
       : '<div class="rule-selection-hint">点击规则序号选中记录，即可在其上方或下方插入。</div>';
-    const empty = keyword ? '<div class="empty-rule-group"><strong>没有匹配的规则</strong><span>清除搜索条件后再试。</span></div>' : '<button class="empty-rule-group" data-action="add-rule"><strong>这个策略组还没有分流规则</strong><span>添加第一条规则，目标将自动设置为当前策略组。</span></button>';
-    return '<section class="nested-rules-panel"><div class="nested-section-heading"><div><h3>分流规则</h3><p>' + (state.groupRuleScope === 'global' ? '检查最终 YAML 的真实顺序，并处理 DIRECT / REJECT 规则。' : '新规则自动归属“' + escapeHtml(group.name) + '”，无需重复选择目标。') + '</p></div><button class="button primary small" data-action="add-rule">添加规则</button></div>'
-      + '<div class="nested-rule-toolbar"><div class="segmented-control nested-rule-scope" aria-label="规则显示范围"><button class="' + (state.groupRuleScope === 'group' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="group" aria-pressed="' + (state.groupRuleScope === 'group') + '">当前策略组 <span>' + rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length + '</span></button><button class="' + (state.groupRuleScope === 'global' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="global" aria-pressed="' + (state.groupRuleScope === 'global') + '">全局顺序 <span>' + rules.length + '</span></button></div><label class="nested-rule-search"><input id="rule-search" value="' + escapeHtml(state.ruleQuery) + '" placeholder="搜索类型、内容、备注或分类" aria-label="搜索规则"></label></div>'
+    const empty = keyword
+      ? '<div class="empty-rule-group"><strong>没有匹配的规则</strong><span>清除搜索条件后再试。</span></div>'
+      : isFallbackGroup
+        ? '<div class="empty-rule-group"><strong>未归组规则已全部处理</strong><span>目标改为真实策略组后，规则会自动移出这里。</span></div>'
+        : '<button class="empty-rule-group" data-action="add-rule"><strong>这个策略组还没有分流规则</strong><span>添加第一条规则，目标将自动设置为当前策略组。</span></button>';
+    const description = state.groupRuleScope === 'global'
+      ? '检查最终 YAML 的真实顺序，并处理跨策略组规则。'
+      : isFallbackGroup
+        ? '这些规则直接指向 DIRECT、REJECT、节点或未知目标；请选择真实策略组完成归类。'
+        : '新规则自动归属“' + escapeHtml(group.name) + '”，无需重复选择目标。';
+    const addButton = isFallbackGroup ? '' : '<button class="button primary small" data-action="add-rule">添加规则</button>';
+    const localScopeLabel = isFallbackGroup ? '未归组规则' : '当前策略组';
+    return '<section class="nested-rules-panel"><div class="nested-section-heading"><div><h3>分流规则</h3><p>' + description + '</p></div>' + addButton + '</div>'
+      + '<div class="nested-rule-toolbar"><div class="segmented-control nested-rule-scope" aria-label="规则显示范围"><button class="' + (state.groupRuleScope === 'group' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="group" aria-pressed="' + (state.groupRuleScope === 'group') + '">' + localScopeLabel + ' <span>' + groupRules.length + '</span></button><button class="' + (state.groupRuleScope === 'global' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="global" aria-pressed="' + (state.groupRuleScope === 'global') + '">全局顺序 <span>' + rules.length + '</span></button></div><label class="nested-rule-search"><input id="rule-search" value="' + escapeHtml(state.ruleQuery) + '" placeholder="搜索类型、内容、备注或分类" aria-label="搜索规则"></label></div>'
       + selectedToolbar + '<div class="nested-rule-list">' + (rows || empty) + '</div></section>';
   }
 
@@ -479,14 +526,27 @@ export const consoleClientScript = String.raw`
   function renderGroupsWorkspace() {
     const config = state.routing.config;
     const query = state.groupQuery.trim().toLowerCase();
+    const unassignedRules = getUnassignedRules();
     const visible = config.groups.filter(function (group) { return !query || group.name.toLowerCase().indexOf(query) >= 0 || group.type.indexOf(query) >= 0; });
-    const rows = visible.map(function (group) {
+    const groupRows = visible.map(function (group) {
       const preview = state.routingPreviews[group.id];
       const realIndex = config.groups.findIndex(function (item) { return item.id === group.id; });
       const ruleCount = config.rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length;
       return '<div class="entity-row unified-group-row ' + (state.selectedGroupId === group.id ? 'active ' : '') + (!group.enabled ? 'disabled' : '') + '"><button class="group-row-select" data-action="select-group" data-id="' + escapeHtml(group.id) + '" aria-pressed="' + (state.selectedGroupId === group.id) + '"><span class="entity-copy"><strong>' + escapeHtml(group.name || '未命名策略组') + '</strong><small>' + escapeHtml(group.type) + ' · ' + (preview ? preview.count + ' 个节点' : '待预览') + '</small></span><span class="group-rule-badge ' + (ruleCount ? '' : 'empty') + '">' + ruleCount + ' 条</span></button><span class="row-order-actions"><button data-action="move-group-up" data-index="' + realIndex + '"' + (realIndex === 0 ? ' disabled' : '') + '>上移</button><button data-action="move-group-down" data-index="' + realIndex + '"' + (realIndex === config.groups.length - 1 ? ' disabled' : '') + '>下移</button></span></div>';
     }).join('');
-    const left = '<section class="entity-panel group-list-panel unified-group-list"><div class="panel-header"><div><h2>策略组</h2><p>' + config.groups.filter(function (group) { return group.enabled; }).length + ' 个已启用 · 选择后配置其分流</p></div><button class="icon-button brand" data-action="add-group" aria-label="新建策略组">新增</button></div><div class="panel-search"><input id="group-search" value="' + escapeHtml(state.groupQuery) + '" placeholder="搜索名称或类型" aria-label="搜索策略组"></div><div class="entity-list" aria-label="策略组列表">' + (rows || '<div class="empty-search">未找到策略组</div>') + '</div></section>';
+    const fallbackSearchText = '未归组规则 兜底 direct reject 直接节点 未知目标';
+    const fallbackRow = unassignedRules.length && (!query || fallbackSearchText.indexOf(query) >= 0)
+      ? '<div class="entity-row unified-group-row ' + (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID ? 'active ' : '') + '"><button class="group-row-select" data-action="select-group" data-id="' + UNASSIGNED_RULES_GROUP_ID + '" aria-pressed="' + (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID) + '"><span class="entity-copy"><strong>未归组规则</strong><small>DIRECT / REJECT / 直接节点</small></span><span class="group-rule-badge">' + unassignedRules.length + ' 条</span></button></div>'
+      : '';
+    const rows = groupRows + fallbackRow;
+    const unassignedSummary = unassignedRules.length ? ' · ' + unassignedRules.length + ' 条待归组' : '';
+    const left = '<section class="entity-panel group-list-panel unified-group-list"><div class="panel-header"><div><h2>策略组</h2><p>' + config.groups.filter(function (group) { return group.enabled; }).length + ' 个已启用' + unassignedSummary + ' · 选择后配置其分流</p></div><button class="icon-button brand" data-action="add-group" aria-label="新建策略组">新增</button></div><div class="panel-search"><input id="group-search" value="' + escapeHtml(state.groupQuery) + '" placeholder="搜索名称或类型" aria-label="搜索策略组"></div><div class="entity-list" aria-label="策略组列表">' + (rows || '<div class="empty-search">未找到策略组</div>') + '</div></section>';
+    if (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID) {
+      const fallbackGroup = { id: UNASSIGNED_RULES_GROUP_ID, name: '未归组规则' };
+      const center = '<section class="editor-panel group-editor unified-group-editor"><div class="panel-header unified-editor-header"><div><h2>未归组规则</h2><p>仅用于管理，不会生成 proxy-group · ' + unassignedRules.length + ' 条待处理</p></div></div>'
+        + '<div class="unified-editor-scroll" id="group-pane-panel">' + renderNestedRules(fallbackGroup) + '</div></section>';
+      return { left: left, center: center };
+    }
     const group = config.groups.find(function (item) { return item.id === state.selectedGroupId; });
     if (!group) return { left: left, center: '<section class="editor-panel centered-empty"><h2>选择一个策略组</h2><p>选择后可在同一处配置其分流规则与成员来源。</p></section>' };
     const ruleCount = config.rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length;
@@ -698,7 +758,9 @@ export const consoleClientScript = String.raw`
     const anchorIndex = rules.findIndex(function (rule) { return rule.id === ruleId; });
     if (anchorIndex < 0) return;
     const anchor = rules[anchorIndex];
-    const targetGroupId = state.groupRuleScope === 'group' ? state.selectedGroupId : anchor.targetGroupId;
+    const targetGroupId = state.groupRuleScope === 'group' && state.selectedGroupId !== UNASSIGNED_RULES_GROUP_ID
+      ? state.selectedGroupId
+      : anchor.targetGroupId;
     const rule = createDefaultRoutingRule(targetGroupId, anchor.category || 'general');
     const insertIndex = anchor.type === 'MATCH' ? anchorIndex : anchorIndex + (position === 'below' ? 1 : 0);
     rules.splice(insertIndex, 0, rule);
@@ -744,9 +806,10 @@ export const consoleClientScript = String.raw`
     const rules = state.routing.config.rules;
     const sourceIndex = rules.findIndex(function (rule) { return rule.id === ruleId; });
     if (sourceIndex < 0) return;
+    const currentScopeRuleIds = new Set(getRulesForGroup(state.selectedGroupId).map(function (rule) { return rule.id; }));
     const candidateIndexes = state.groupRuleScope === 'global'
       ? rules.map(function (_, index) { return index; })
-      : rules.map(function (rule, index) { return rule.targetGroupId === state.selectedGroupId ? index : -1; }).filter(function (index) { return index >= 0; });
+      : rules.map(function (rule, index) { return currentScopeRuleIds.has(rule.id) ? index : -1; }).filter(function (index) { return index >= 0; });
     const slotIndex = candidateIndexes.indexOf(sourceIndex);
     const targetIndex = candidateIndexes[slotIndex + delta];
     if (targetIndex == null) return;
@@ -1130,6 +1193,25 @@ export const consoleClientScript = String.raw`
       else { delete rule.providerId; rule.value = rule.value || ''; }
       render();
     }
+    if (ruleField === 'targetGroupId') {
+      const rule = state.routing.config.rules[Number(target.getAttribute('data-rule-index'))];
+      const destinationGroup = rule && state.routing.config.groups.find(function (group) { return group.id === rule.targetGroupId; });
+      if (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID) {
+        const remainingRules = getUnassignedRules();
+        if (!remainingRules.length) {
+          const nextGroup = destinationGroup || state.routing.config.groups[0];
+          state.selectedGroupId = nextGroup ? nextGroup.id : '';
+          const nextRule = getRulesForGroup(state.selectedGroupId)[0];
+          state.selectedRuleId = destinationGroup && rule ? rule.id : (nextRule ? nextRule.id : '');
+        } else if (state.groupRuleScope === 'group') {
+          state.selectedRuleId = remainingRules.some(function (item) { return item.id === state.selectedRuleId; })
+            ? state.selectedRuleId
+            : remainingRules[0].id;
+        }
+      }
+      render();
+      if (destinationGroup) showToast('规则已归组', 'success', '目标已改为“' + destinationGroup.name + '”');
+    }
   }
 
   /**
@@ -1204,7 +1286,7 @@ export const consoleClientScript = String.raw`
       state.groupPane = 'rules';
       state.groupRuleScope = 'group';
       state.ruleQuery = '';
-      const firstRule = state.routing.config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+      const firstRule = getRulesForGroup(state.selectedGroupId)[0];
       state.selectedRuleId = firstRule ? firstRule.id : '';
       render();
       const selectedGroupButton = workspace.querySelector('[data-action="select-group"][data-id="' + state.selectedGroupId + '"]');
@@ -1216,7 +1298,7 @@ export const consoleClientScript = String.raw`
       state.groupRuleScope = button.getAttribute('data-scope');
       const scopeRules = state.groupRuleScope === 'global'
         ? state.routing.config.rules
-        : state.routing.config.rules.filter(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+        : getRulesForGroup(state.selectedGroupId);
       if (!scopeRules.some(function (rule) { return rule.id === state.selectedRuleId; })) {
         state.selectedRuleId = scopeRules[0] ? scopeRules[0].id : '';
       }
@@ -1294,8 +1376,13 @@ export const consoleClientScript = String.raw`
       state.routing.config.rules.splice(index, 1);
       const remainingScopeRules = state.groupRuleScope === 'global'
         ? state.routing.config.rules
-        : state.routing.config.rules.filter(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+        : getRulesForGroup(state.selectedGroupId);
       state.selectedRuleId = remainingScopeRules[0] ? remainingScopeRules[0].id : '';
+      if (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID && !getUnassignedRules().length) {
+        state.selectedGroupId = state.routing.config.groups[0] ? state.routing.config.groups[0].id : '';
+        const firstGroupRule = getRulesForGroup(state.selectedGroupId)[0];
+        state.selectedRuleId = firstGroupRule ? firstGroupRule.id : '';
+      }
       render();
       showToast('规则已删除', 'success', removed ? (removed.remark || removed.value || removed.type) : '');
     } else if (action === 'move-selected-rule-up' || action === 'move-selected-rule-down') {
@@ -1353,8 +1440,10 @@ export const consoleClientScript = String.raw`
         try {
           const data = await api('/api/routing-config/import', { method: 'POST', body: JSON.stringify({ yaml: text }) });
           state.routing.config = data.config;
-          state.selectedGroupId = data.config.groups[0] ? data.config.groups[0].id : '';
-          const firstImportedRule = data.config.rules.find(function (rule) { return rule.targetGroupId === state.selectedGroupId; });
+          state.selectedGroupId = data.config.groups[0]
+            ? data.config.groups[0].id
+            : (getUnassignedRules().length ? UNASSIGNED_RULES_GROUP_ID : '');
+          const firstImportedRule = getRulesForGroup(state.selectedGroupId)[0];
           state.selectedRuleId = firstImportedRule ? firstImportedRule.id : '';
           state.selectedProviderId = data.config.providers[0] ? data.config.providers[0].id : '';
           state.routingTab = 'groups';

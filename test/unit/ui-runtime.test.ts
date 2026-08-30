@@ -27,6 +27,17 @@ describe('生产 UI 运行时', () => {
     expect(consoleClientScript).toContain('最终 MATCH 必须保持在末尾')
   })
 
+  it('用虚拟兜底分组展示所有未指向 proxy-group 的规则，并允许重新归组', () => {
+    expect(consoleClientScript).toContain("const UNASSIGNED_RULES_GROUP_ID = '__ui_unassigned_rules__'")
+    expect(consoleClientScript).toContain('return !groupIds.has(rule.targetGroupId)')
+    expect(consoleClientScript).toContain('<strong>未归组规则</strong>')
+    expect(consoleClientScript).toContain('DIRECT / REJECT / 直接节点')
+    expect(consoleClientScript).toContain("state.groupRuleScope === 'global' || isFallbackGroup")
+    expect(consoleClientScript).toContain("if (ruleField === 'targetGroupId')")
+    expect(consoleClientScript).toContain("state.selectedGroupId !== UNASSIGNED_RULES_GROUP_ID")
+    expect(consoleClientScript).toContain('未知目标：')
+  })
+
   it('为节点标签和完整 YAML 预览提供独立布局与滚动样式', () => {
     expect(consoleClientScript).toContain('class="node-preview-list" role="list"')
     expect(consoleClientScript).toContain('class="yaml-preview" id="yaml-preview" tabindex="0"')
