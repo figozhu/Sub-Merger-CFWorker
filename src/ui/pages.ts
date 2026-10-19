@@ -108,7 +108,7 @@ export function renderLoginPage(): string {
 
 /**
  * 生成登录后的新版控制台 Shell。
- * 四个业务页面由轻量浏览器脚本按 Hash 渲染，生产运行时不依赖 React 或 Babel。
+ * 业务页面由轻量浏览器脚本按 Hash 渲染，生产运行时不依赖 React 或 Babel。
  * @returns 可直接由 Hono 返回的完整 HTML 文档。
  */
 export function renderDashboardPage(): string {
@@ -130,6 +130,7 @@ export function renderDashboardPage(): string {
           <button type="button" class="nav-item" data-nav="nodes"><span>自建节点</span></button>
           <button type="button" class="nav-item" data-nav="routing"><span>路由配置</span></button>
           <button type="button" class="nav-item" data-nav="links"><span>订阅输出</span></button>
+          <button type="button" class="nav-item" data-nav="logs"><span>错误日志</span></button>
         </nav>
       </aside>
       <button type="button" class="sidebar-backdrop" id="sidebar-backdrop" aria-label="关闭导航"></button>

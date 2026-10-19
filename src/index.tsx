@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
@@ -8,7 +8,10 @@ import YAML, { isMap } from 'yaml'
 import { SubscriptionType, type FinalObj } from './types/types'
 import type { RoutingConfig } from './types/routing'
 import { generatePasswordHash } from './utils/passwordMgr'
-import { generateSubscriptionUserInfoString, getSubscribeYaml } from './utils/getSubscribeYaml'
+import { DEFAULT_SUBSCRIPTION_UA, fetchSubscription, generateSubscriptionUserInfoString, getSubscribeYaml } from './utils/getSubscribeYaml'
+import { listErrorLogs, writeErrorLog } from './services/errorLogs'
+import { createSubscriptionAccessLog } from './services/subscriptionAccessLogs'
+import { getSubscriptionSettings, saveSubscriptionSettings, validateSubscriptionUserAgent } from './services/subscriptionSettings'
 import generateLegacyProxyConfigYaml from './utils/generateProxyConfigYaml'
 import { generateRoutingYaml, generateRoutingYamlVariants } from './utils/generateRoutingYaml'
 import { validateRoutingConfig } from './utils/validateRoutingConfig'
@@ -43,7 +46,6 @@ export interface Bindings {
   TABLENAME: string
   KEY_VERSION: string
   MAGIC: string
-  UA: string
   INSTANT_REFRESH_INTERVAL: string
   NOTIFICATION?: { BARK_OPENID?: string }
   ONETIME_PATTERN: Record<string, string>
@@ -54,6 +56,9 @@ type AppEnv = { Bindings: Bindings }
 
 /** API 请求体最大为 1 MiB，足以容纳配置，同时避免超大 JSON/YAML 消耗 Worker 资源。 */
 const MAX_JSON_BODY_BYTES = 1024 * 1024
+
+/** 全部上游不可用且无成功缓存时，公开端点应报告 502。 */
+class SubscriptionSourcesUnavailableError extends Error {}
 
 /** 创建 Hono 应用；单独导出便于接口测试直接调用 app.request。 */
 export const app = new Hono<AppEnv>()
@@ -137,8 +142,40 @@ async function apiAuthMiddleware(c: any, next: () => Promise<void>): Promise<Res
   await next()
 }
 
+/**
+ * 记录公开订阅端点的客户端访问，包含缓存返回、鉴权拒绝和生成失败。
+ * @param subType 当前路由对应的订阅类型。
+ * @returns 等待响应确定后记录一次最终状态的 Hono 中间件。
+ */
+function subscriptionAccessMiddleware(subType: SubscriptionType): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const startedAt = Date.now()
+    await next()
+    const task = writeErrorLog(c.env, createSubscriptionAccessLog(c.req.raw, subType, c.res.status, startedAt))
+    try {
+      // 生产环境后台持久化，客户端无需等待日志 KV 写入完成。
+      c.executionCtx.waitUntil(task)
+    } catch {
+      // app.request 等没有 ExecutionContext 的运行方式仍需等待，避免丢失记录。
+      await task
+    }
+  }
+}
+
 app.use('/dashboard', htmlAuthMiddleware)
+app.use('/logs', htmlAuthMiddleware)
 app.use('/api/*', apiAuthMiddleware)
+app.use('/subscribe/:magic', subscriptionAccessMiddleware(SubscriptionType.Monthly))
+app.use('/onetime/:magic', subscriptionAccessMiddleware(SubscriptionType.TrafficPackage))
+
+/** 捕获未处理运行异常，日志使用固定说明，避免密码、MAGIC 和订阅地址进入堆栈。 */
+app.onError(async (error, c) => {
+  if (error instanceof SubscriptionSourcesUnavailableError) {
+    return c.req.path.startsWith('/api/') ? failure(c, 502, '所有订阅源读取失败，请查看错误日志') : c.text('所有订阅源读取失败，请登录管理页面查看错误日志', 502)
+  }
+  await writeErrorLog(c.env, { level: 'error', scope: 'request', code: 'UNHANDLED_ERROR', message: '请求处理发生未捕获异常', hint: '检查 KV 绑定、配额和已保存配置；可结合 Workers 运行状态进一步排查。' })
+  return c.req.path.startsWith('/api/') ? failure(c, 500, '服务处理失败，请查看错误日志和 KV 状态') : c.text('订阅处理失败，请登录管理页面查看错误日志', 500)
+})
 
 /** 登录接口仅比较内存中的部署密码，任何日志都不会输出密码值。 */
 app.post('/login', async (c) => {
@@ -162,6 +199,35 @@ app.get('/', (c) => isAuthenticated(c) ? c.redirect('/dashboard#subscriptions') 
 
 /** 登录后的控制台只返回轻量 Shell，真实数据全部通过受认证 API 获取。 */
 app.get('/dashboard', (c) => c.html(renderDashboardPage()))
+
+/** 错误日志的独立可访问入口，复用控制台导航与认证。 */
+app.get('/logs', (c) => c.redirect('/dashboard#logs'))
+
+/** 登录后分页读取日志；禁止浏览器缓存运维数据。 */
+app.get('/api/logs', async (c) => {
+  const cursor = c.req.query('cursor')
+  const category = c.req.query('category') || 'diagnostic'
+  if (category !== 'diagnostic' && category !== 'access') return failure(c, 400, '日志分类无效')
+  if (cursor && cursor.length > 4096) return failure(c, 400, '日志分页游标无效')
+  c.header('Cache-Control', 'no-store')
+  return success(c, await listErrorLogs(c.env, cursor, category))
+})
+
+/**
+ * 从当前 Worker 出口诊断一个已保存源，可指定 UA 进行比较。
+ * 始终绕过正式缓存，只返回脱敏元数据，不发送通知、不修改订阅和缓存。
+ */
+app.post('/api/subscriptions/diagnose', async (c) => {
+  let body: unknown
+  try { body = await readJsonBody(c) } catch (error) { return failure(c, 400, error instanceof Error ? error.message : '请求无效') }
+  const input = body && typeof body === 'object' ? body as Record<string, unknown> : {}
+  const subscriptions = await getSubscriptions(c.env)
+  if (!Number.isInteger(input.index) || Number(input.index) < 0 || Number(input.index) >= subscriptions.length) return failure(c, 400, '请选择已保存的订阅源')
+  if (input.userAgent !== undefined && validateSubscriptionUserAgent(input.userAgent)) return failure(c, 400, validateSubscriptionUserAgent(input.userAgent))
+  const result = await fetchSubscription(subscriptions[Number(input.index)], c.env, { diagnostic: true, userAgent: typeof input.userAgent === 'string' ? input.userAgent.trim() : undefined })
+  c.header('Cache-Control', 'no-store')
+  return success(c, { ok: result.ok, diagnostic: result.diagnostic })
+})
 
 /**
  * 根据当前订阅类型解析真实节点，不写缓存或访问时间键。
@@ -194,10 +260,10 @@ export async function getSubYamlWithCache(
   noCache = false,
 ): Promise<FinalObj> {
   const cacheKey = `${env.TABLENAME}:${env.KEY_VERSION}:cacheObj:${subType}`
-  if (!noCache) {
-    const cached = await env.SUB_MERGER_KV.get<FinalObj>(cacheKey, 'json')
-    if (cached) return cached
-  }
+  const stored = await env.SUB_MERGER_KV.get<FinalObj>(cacheKey, 'json')
+  // 旧 UA 产生的升级提示配置也可能已被缓存；升级后应立即重新拉取真实节点。
+  const cached = stored && !/请将 Clash Verge Rev 升级到|你现在的版本是/.test(stored.normalYaml) ? stored : null
+  if (!noCache && cached) return cached
 
   const finalObj: FinalObj = {
     subUserInfo: { upload: 0, download: 0, total: 0, expire: 9999999999 },
@@ -217,7 +283,12 @@ export async function getSubYamlWithCache(
     return finalObj
   }
 
-  const [subUserInfo, subscriptionNodes] = await getSubscribeYaml(targets, env)
+  const [subUserInfo, subscriptionNodes, fetchSummary] = await getSubscribeYaml(targets, env)
+  if (fetchSummary.failedCount > 0 && cached) {
+    await writeErrorLog(env, { level: 'warning', scope: 'subscription', code: 'CACHE_FALLBACK', subscriptionType: subType, message: '上游抓取不完整，继续使用上次成功缓存', hint: '查看同一时段的订阅源错误，并在日志页诊断；恢复后定时刷新会更新缓存。' })
+    return cached
+  }
+  if (fetchSummary.failedCount === targets.length) throw new SubscriptionSourcesUnavailableError('所有订阅源读取失败')
   const patterns = subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN
   const published = await getPublishedRoutingConfig(env)
   let generated: { normalYaml: string; stashYaml: string }
@@ -240,7 +311,8 @@ export async function getSubYamlWithCache(
   finalObj.normalYaml = `# 最后更新时间（通用）：${updatedAt}\n\n${generated.normalYaml}`
   finalObj.stashYaml = `# 最后更新时间（Stash）：${updatedAt}\n\n${generated.stashYaml}`
   finalObj.subUserInfo = subUserInfo
-  await env.SUB_MERGER_KV.put(cacheKey, JSON.stringify(finalObj))
+  // 没有旧缓存时允许返回仍可用的部分源，但不把缺失节点的结果保存成成功缓存。
+  if (fetchSummary.failedCount === 0) await env.SUB_MERGER_KV.put(cacheKey, JSON.stringify(finalObj))
   return finalObj
 }
 
@@ -272,6 +344,22 @@ app.get('/onetime/:magic', (c) => serveSubscription(c, SubscriptionType.TrafficP
 
 /** 获取当前订阅源。 */
 app.get('/api/subscriptions', async (c) => success(c, { subscriptions: await getSubscriptions(c.env) }))
+
+/** 获取全局 UA 和代码默认值，页面不会把默认值误保存成自定义设置。 */
+app.get('/api/subscriptions/settings', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  return success(c, { ...await getSubscriptionSettings(c.env), defaultUserAgent: DEFAULT_SUBSCRIPTION_UA })
+})
+
+/** 保存唯一的全局 UA；空字符串明确恢复代码默认值，保存后清理正式缓存。 */
+app.put('/api/subscriptions/settings', async (c) => {
+  let body: unknown
+  try { body = await readJsonBody(c) } catch (error) { return failure(c, 400, error instanceof Error ? error.message : '请求无效') }
+  const result = await saveSubscriptionSettings(c.env, body)
+  if (result.errors.length) return failure(c, 422, '全局 User-Agent 配置无效', result.errors)
+  c.header('Cache-Control', 'no-store')
+  return success(c, { ...result.settings, defaultUserAgent: DEFAULT_SUBSCRIPTION_UA })
+})
 
 /** 校验并保存订阅源，成功后清理两类正式缓存。 */
 app.put('/api/subscriptions', async (c) => {
@@ -386,7 +474,7 @@ app.post('/api/routing-config/format', async (c) => {
 
 /**
  * 使用当前草稿和真实节点生成完整输出预览。
- * 此接口不写 KV、不修改修订、不读取或更新正式缓存。
+ * 此接口不修改配置、修订或正式缓存；抓取错误会单独记录诊断日志。
  */
 app.post('/api/routing-config/preview', async (c) => {
   let body: any
@@ -460,8 +548,13 @@ app.post('/api/config', async (c) => {
 
 /** 定时任务继续强制刷新包月与流量包两类正式缓存。 */
 async function scheduled(_controller: ScheduledController, env: Bindings): Promise<void> {
-  await getSubYamlWithCache(SubscriptionType.TrafficPackage, env, true)
-  await getSubYamlWithCache(SubscriptionType.Monthly, env, true)
+  const results = await Promise.allSettled([SubscriptionType.TrafficPackage, SubscriptionType.Monthly].map(async (subType) => {
+    try { await getSubYamlWithCache(subType, env, true) } catch {
+      await writeErrorLog(env, { level: 'error', scope: 'scheduled', code: 'SCHEDULED_REFRESH_FAILED', subscriptionType: subType, message: '定时订阅刷新失败', hint: '检查对应订阅源的错误日志和 KV 状态。' })
+      throw new Error('定时订阅刷新失败')
+    }
+  }))
+  if (results.some((result) => result.status === 'rejected')) throw new Error('定时订阅刷新失败，请查看错误日志')
 }
 
 export default { fetch: app.fetch, scheduled }

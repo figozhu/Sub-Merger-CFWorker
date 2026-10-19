@@ -1,5 +1,12 @@
 
-async function sendBarkNotification(openid: string, title: string, content: string): Promise<void> {
+/**
+ * 发送已有配置启用的订阅失败通知，未配置时直接返回。
+ * @param openid 可选 Bark 标识，禁止进入日志。
+ * @param title 通知标题。
+ * @param content 不含原始异常和订阅凭据的通知文本。
+ * @returns 通知结束后完成；失败不阻断订阅请求，最多等待 5 秒。
+ */
+async function sendBarkNotification(openid: string | undefined, title: string, content: string): Promise<void> {
     if (!openid || openid === "") {
         return
     }
@@ -8,6 +15,7 @@ async function sendBarkNotification(openid: string, title: string, content: stri
     try {
         const response = await fetch(url, {
             method: 'GET',
+            signal: AbortSignal.timeout(5000),
         });
 
         if (!response.ok) {

@@ -5,6 +5,7 @@
 export class MockKV {
   readonly values = new Map<string, string>()
   readonly deleted: string[] = []
+  readonly putOptions = new Map<string, { expirationTtl?: number }>()
 
   /** 按 Cloudflare KV 的 text/json 模式读取数据。 */
   async get<T = string>(key: string, type?: string): Promise<T | string | null> {
@@ -14,8 +15,16 @@ export class MockKV {
   }
 
   /** 写入字符串值。 */
-  async put(key: string, value: string): Promise<void> {
+  async put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
     this.values.set(key, value)
+    if (options) this.putOptions.set(key, options)
+  }
+
+  /** 按键名字典序模拟 KV 分页；游标保存最后一条键，便于验证倒序日志。 */
+  async list(options: { prefix: string; limit: number; cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor: string }> {
+    const keys = [...this.values.keys()].filter((key) => key.startsWith(options.prefix) && (!options.cursor || key > options.cursor)).sort()
+    const page = keys.slice(0, options.limit)
+    return { keys: page.map((name) => ({ name })), list_complete: keys.length <= options.limit, cursor: page.at(-1) || '' }
   }
 
   /** 删除值并记录删除顺序。 */

@@ -8,10 +8,10 @@ describe('生产 UI 运行时', () => {
     expect(() => new Function(consoleClientScript)).not.toThrow()
   })
 
-  it('不包含原型 CDN React/Babel，且主导航只有四项真实入口', () => {
+  it('不包含原型 CDN React/Babel，且主导航包含五项真实入口', () => {
     const html = renderDashboardPage()
     expect(html).not.toMatch(/unpkg|ReactDOM|babel/i)
-    expect((html.match(/data-nav=/g) || []).length).toBe(4)
+    expect((html.match(/data-nav=/g) || []).length).toBe(5)
     expect(html).not.toMatch(/总览|系统设置|管理员账户|生产环境/)
     expect(renderLoginPage()).not.toMatch(/用户名|记住我|注册|找回密码/)
   })

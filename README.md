@@ -2,7 +2,7 @@
 基于CF Worker的Clash系软件的订阅合并，增加分流配置
 
 优势：
- - 无论订阅地址是否被墙，CF的节点都是可以去拉取的
+ - 由 Cloudflare 节点代为拉取订阅；上游需允许 CF 出口访问，并返回兼容的 Clash YAML
  - 你的Worker绑一个没被墙的域名，就可以无需代理更新订阅配置了
 
 
@@ -66,8 +66,30 @@ pnpm run build
 | `${TABLENAME}:routing:draft` | 最近保存的路由草稿；不影响正式订阅 |
 | `${TABLENAME}:routing:published` | 当前已发布路由配置与修订号 |
 | `${TABLENAME}:config` | 升级期兼容旧自建节点和默认 YAML |
+| `${TABLENAME}:subscription-settings` | 所有订阅源共用的全局 User-Agent 配置 |
+| `${TABLENAME}:logs:<倒序时间>:<UUID>` | 独立诊断日志，自动保留 7 天 |
+| `${TABLENAME}:access-logs:<倒序时间>:<UUID>` | 客户端拉取订阅的访问日志，自动保留 7 天 |
 
 保存订阅源、保存自建节点或发布路由配置后，会清除包年包月和流量包的两个现有缓存键。保存草稿、校验和完整输出预览不会清理正式缓存。
+
+### 错误日志与订阅源诊断
+
+登录后点击“错误日志”，也可访问 `/logs` 或 `/dashboard#logs`。页面按新到旧展示最近记录，每页 50 条，可刷新或加载更多；日志复用现有 `SUB_MERGER_KV`，不需新增绑定。KV 跨区域同步可能延迟，刚产生的记录可稍后刷新。
+
+日志页提供“运行诊断”和“订阅访问”两个分类，分别分页。订阅访问记录覆盖 `/subscribe/:magic` 和 `/onetime/:magic` 的每次请求，包括缓存返回、HEAD 请求、鉴权失败及生成失败；直接展示来源 IP 和客户端 UA，详情包含访问时间、订阅类型、请求方法、脱敏端点、最终 HTTP 状态、处理耗时及 CF Ray。客户端 UA 与 Worker 请求上游时的全局 UA 分开记录。生产环境通过 `waitUntil` 后台写入，日志故障不影响订阅响应。
+
+来源 IP 使用 `CF-Connecting-IP`；Cloudflare Pseudo IPv4 场景优先使用 `CF-Connecting-IPv6` 中的原始 IPv6。缺少有效 Cloudflare 地址头时显示“未知”，不会将可由客户端自填的 `X-Forwarded-For` 当作真实 IP。本地模拟请求可能没有这些头，部署后可记录 CF 提供的实际地址。相关行为见 [Cloudflare 请求头说明](https://developers.cloudflare.com/fundamentals/reference/http-headers/#cf-connecting-ip)。访问日志不保存完整请求 URL、查询参数、MAGIC、Cookie、Authorization 或订阅内容；客户端 UA 中的完整链接和凭据字段同样脱敏。查看访问日志使用受认证接口 `GET /api/logs?category=access&cursor=...`，默认分类仍为运行诊断。
+
+选择已保存的订阅源并点击“开始诊断”，即可从当前 Worker 出口请求上游，查看实际 User-Agent、HTTP 状态、耗时、响应字节数、节点数、重定向和 CF 验证线索。诊断绕过正式缓存，不修改源配置或缓存；可临时填写不同 UA 进行比较。例如填入 `Clash.Meta` 后诊断成功，而旧 UA 返回 `CLIENT_UPGRADE_REQUIRED`，说明上游根据客户端标识返回了升级提示配置。临时填写的 UA 不会自动保存到全局设置。
+
+- 订阅源页面提供一份“全局 User-Agent”，所有源共用。填写后点击“保存 UA”，后续抓取使用该值；清空并保存则使用代码默认值 `Clash.Meta`。配置保存到 KV，并清理两类正式缓存，无需修改部署变量。正式生成、定时刷新和未指定临时 UA 的诊断都使用这份设置。
+- 抓取总超时为 20 秒，包含响应体读取；单源正文最多 5 MiB。正常 YAML 即使被上游误标为 `text/html` 仍可解析。
+- 日志区分 HTTP 拒绝、WAF 人机验证、网络异常、超时、非 Clash 格式、YAML 错误、空节点和客户端升级提示。仅保存脱敏元数据，不保存订阅正文、完整 URL、token 或节点密码。
+- 自动抓取仅记录失败；主动诊断会记录成功与失败；运行异常和定时刷新失败也会记录。日志写入失败不会阻断订阅处理，可在 Workers 控制台查看固定故障提示。
+- 抓取不完整且已有成功缓存时继续返回旧缓存；没有缓存时可返回成功源的节点，但不缓存不完整结果；全部失败且没有可用缓存时返回 HTTP 502。已知旧升级提示缓存会重新拉取。
+- `GET /api/logs?cursor=...` 与 `POST /api/subscriptions/diagnose` 均需要登录。诊断请求体示例：`{"index":0,"userAgent":"Clash.Meta"}`，`index` 为当前已保存数组中的位置。
+
+排查本地可读但 CF 不可读时，先比较实际 UA 和节点数量。HTTP 200 也可能只包含服务商的提示节点；403 或 `CLOUDFLARE_CHALLENGE` 则提示检查上游 WAF、出口 IP 和地区限制，429 提示频率限制，`NETWORK_ERROR` 需要继续核查 DNS/TLS 和网络。只有部署后从 Worker 执行诊断，才能确认真实 CF 出口的结果。Cloudflare 对验证页的识别依据见[官方说明](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)。
 
 ### 完整 YAML 导入与规则备注
 
@@ -124,7 +146,6 @@ pnpm run deploy
 | SALT | 密码加密盐值 |
 | TABLENAME | KV存储表名（前缀） |
 | MAGIC | 订阅链接中的魔法字符串 |
-| UA | 请求订阅时使用的User-Agent |
 | BARK_OPENID | Bark 通知的 openid |
 | EXCLUDE_PATTERN | 排除节点的正则表达式 |
 | OTHER_MATCH_PATTERN | 需要的其他类型节点的正则表达式 |

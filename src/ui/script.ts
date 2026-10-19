@@ -6,7 +6,7 @@ export const consoleClientScript = String.raw`
 (() => {
   'use strict';
 
-  const VALID_NAVS = ['subscriptions', 'nodes', 'routing', 'links'];
+  const VALID_NAVS = ['subscriptions', 'nodes', 'routing', 'links', 'logs'];
   const MANAGED_YAML_KEYS = ['proxies', 'proxy-groups', 'rule-providers', 'rules'];
   /** 仅供 UI 使用的虚拟分组 ID，不会写入路由配置或生成到 Clash YAML。 */
   const UNASSIGNED_RULES_GROUP_ID = '__ui_unassigned_rules__';
@@ -22,13 +22,27 @@ export const consoleClientScript = String.raw`
   /** 控制台全部可变状态；只保存真实 API 数据和当前编辑状态。 */
   const state = {
     activeNav: 'subscriptions',
+    applicationError: '',
     subscriptions: [],
     subscriptionsBaseline: '[]',
     subscriptionErrors: {},
+    userAgent: '',
+    userAgentBaseline: '',
+    defaultUserAgent: '',
+    userAgentError: '',
     selfNodesRaw: '[]',
     selfNodesBaseline: '[]',
     selfNodeAnalysis: { valid: true, nodes: [], errors: [] },
     outputs: [],
+    logs: [],
+    logsCategory: 'diagnostic',
+    logsCursor: '',
+    logsLoaded: false,
+    logsLoading: false,
+    logsError: '',
+    diagnostic: null,
+    diagnosticSourceIndex: '0',
+    diagnosticUserAgent: '',
     routing: null,
     routingBaseline: '',
     routingTab: 'groups',
@@ -116,6 +130,7 @@ export const consoleClientScript = String.raw`
    */
   function hasUnsavedChanges() {
     return JSON.stringify(state.subscriptions) !== state.subscriptionsBaseline
+      || state.userAgent !== state.userAgentBaseline
       || state.selfNodesRaw !== state.selfNodesBaseline
       || (state.routing && JSON.stringify(state.routing.config) !== state.routingBaseline);
   }
@@ -232,17 +247,27 @@ export const consoleClientScript = String.raw`
   }
 
   /**
-   * 读取四类控制台数据并建立编辑基线。
+   * 读取控制台数据并建立编辑基线；配置异常时仍允许进入独立错误日志页。
    * @returns {Promise<void>} 全部数据加载完成后重新渲染当前页面。
    */
   async function loadApplication() {
     try {
-      const results = await Promise.all([
+      const settled = await Promise.allSettled([
         api('/api/subscriptions'),
         api('/api/self-nodes'),
         api('/api/routing-config'),
         api('/api/outputs'),
+        api('/api/subscriptions/settings'),
       ]);
+      // 即使路由配置损坏，也保留已读取的源列表，便于管理员在日志页继续诊断。
+      if (settled[0].status === 'fulfilled') {
+        state.subscriptions = settled[0].value.subscriptions || [];
+        state.subscriptionsBaseline = JSON.stringify(state.subscriptions);
+      }
+      const failed = settled.find(function (result) { return result.status === 'rejected'; });
+      if (failed) throw failed.reason;
+      const results = settled.map(function (result) { return result.value; });
+      state.applicationError = '';
       state.subscriptions = results[0].subscriptions || [];
       state.subscriptionsBaseline = JSON.stringify(state.subscriptions);
       state.selfNodesRaw = results[1].raw || '[]';
@@ -251,6 +276,9 @@ export const consoleClientScript = String.raw`
       state.routing = results[2];
       state.routingBaseline = JSON.stringify(results[2].config);
       state.outputs = results[3].outputs || [];
+      state.userAgent = results[4].userAgent;
+      state.userAgentBaseline = state.userAgent;
+      state.defaultUserAgent = results[4].defaultUserAgent;
       state.selectedGroupId = results[2].config.groups[0]
         ? results[2].config.groups[0].id
         : (getUnassignedRules().length ? UNASSIGNED_RULES_GROUP_ID : '');
@@ -259,8 +287,8 @@ export const consoleClientScript = String.raw`
       state.selectedProviderId = results[2].config.providers[0] ? results[2].config.providers[0].id : '';
       render();
     } catch (error) {
-      workspace.innerHTML = '<div class="fatal-state"><strong>配置加载失败</strong><span>' + escapeHtml(error.message) + '</span><button class="button primary" id="retry-load">重试</button></div>';
-      document.getElementById('retry-load').addEventListener('click', loadApplication);
+      state.applicationError = error.message;
+      render();
     }
   }
 
@@ -284,7 +312,8 @@ export const consoleClientScript = String.raw`
    * @returns {string} 订阅源页面 HTML。
    */
   function renderSubscriptionsPage() {
-    const dirty = JSON.stringify(state.subscriptions) !== state.subscriptionsBaseline;
+    const sourcesDirty = JSON.stringify(state.subscriptions) !== state.subscriptionsBaseline;
+    const dirty = sourcesDirty || state.userAgent !== state.userAgentBaseline;
     const rows = state.subscriptions.map(function (subscription, index) {
       const errors = state.subscriptionErrors[index] || {};
       const nameErrorId = 'subscription-name-error-' + index;
@@ -298,13 +327,26 @@ export const consoleClientScript = String.raw`
         + '<td><button type="button" class="icon-button danger" data-action="delete-subscription" data-index="' + index + '" aria-label="删除 ' + escapeHtml(subscription.subName || '订阅源') + '">删除</button></td></tr>';
     }).join('');
     const actions = '<button type="button" class="button secondary" data-action="add-subscription">添加订阅源</button>'
-      + '<button type="button" class="button primary" data-action="save-subscriptions" data-busy-key="subscriptions"' + (!dirty ? ' disabled' : '') + '>保存</button>';
+      + '<button type="button" class="button primary" data-action="save-subscriptions" data-busy-key="subscriptions"' + (!sourcesDirty ? ' disabled' : '') + '>保存订阅源</button>';
     return pageHeader('订阅源', dirty ? '有未保存更改' : state.subscriptions.length + ' 个订阅源', dirty ? 'dirty' : 'saved', actions)
-      + '<div class="workspace-content"><section class="data-panel subscription-panel">'
+      + '<div class="workspace-content">' + renderGlobalUserAgent() + '<section class="data-panel subscription-panel">'
       + (state.subscriptionErrors.global ? '<div class="inline-error">' + escapeHtml(state.subscriptionErrors.global.message) + '</div>' : '')
       + '<div class="data-table-wrap"><table class="data-table subscription-table"><thead><tr><th>名称</th><th>类型</th><th>订阅地址</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + (!state.subscriptions.length ? '<div class="empty-state"><strong>还没有订阅源</strong><button class="button primary" data-action="add-subscription">添加订阅源</button></div>' : '')
       + '</section></div>';
+  }
+
+  /**
+   * 渲染全部源共用的 UA 设置，与订阅源列表独立保存。
+   * @returns {string} 全局 UA 面板，空值仅显示默认提示，不写入配置。
+   */
+  function renderGlobalUserAgent() {
+    const busy = state.busy.has('subscriptionSettings');
+    const disabled = busy || state.userAgent === state.userAgentBaseline;
+    return '<section class="data-panel subscription-ua-panel"><h2>全局 User-Agent</h2><p id="global-ua-help">适用于全部订阅源。留空使用代码默认值：<code>' + escapeHtml(state.defaultUserAgent) + '</code>。</p>'
+      + '<div class="global-ua-controls"><label class="field"><span>自定义 UA（可选）</span><input id="global-user-agent" aria-label="全局 User-Agent" aria-describedby="global-ua-help global-ua-error"' + (state.userAgentError ? ' aria-invalid="true"' : '') + ' value="' + escapeHtml(state.userAgent) + '" placeholder="留空使用 ' + escapeHtml(state.defaultUserAgent) + '" maxlength="256" spellcheck="false" autocomplete="off"></label>'
+      + '<button type="button" class="button secondary" data-action="save-subscription-settings" data-busy-key="subscriptionSettings"' + (disabled ? ' disabled' : '') + ' aria-busy="' + busy + '">' + (busy ? '保存中…' : '保存 UA') + '</button></div>'
+      + '<small class="field-error" id="global-ua-error" role="alert">' + escapeHtml(state.userAgentError) + '</small></section>';
   }
 
   /**
@@ -667,11 +709,94 @@ export const consoleClientScript = String.raw`
       if (active) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
     });
-    if (state.activeNav === 'subscriptions') workspace.innerHTML = renderSubscriptionsPage();
+    if (state.applicationError && state.activeNav !== 'logs') {
+      workspace.innerHTML = '<div class="fatal-state"><strong>配置加载失败</strong><span>' + escapeHtml(state.applicationError) + '</span><button class="button primary" data-action="retry-application">重试</button><button class="button secondary" data-action="open-logs">查看错误日志</button></div>';
+    }
+    else if (state.activeNav === 'subscriptions') workspace.innerHTML = renderSubscriptionsPage();
     else if (state.activeNav === 'nodes') workspace.innerHTML = renderNodesPage();
     else if (state.activeNav === 'routing') workspace.innerHTML = renderRoutingPage();
+    else if (state.activeNav === 'logs') workspace.innerHTML = renderLogsPage();
     else workspace.innerHTML = renderOutputsPage();
     bindEditorScroll();
+    if (state.activeNav === 'logs' && !state.logsLoaded && !state.logsLoading) refreshLogs(false);
+  }
+
+  /**
+   * 渲染脱敏诊断元数据，所有来源名称和响应头先转义后展示。
+   * @param {object} entry 单条日志或本次诊断结果。
+   * @returns {string} 可展开的日志卡片。
+   */
+  function renderLogEntry(entry) {
+    const labels = { error: '错误', warning: '警告', info: '成功' };
+    const isAccess = entry.scope === 'access';
+    const title = isAccess ? (entry.subscriptionType || '') + '订阅访问' : entry.sourceName || (entry.scope === 'scheduled' ? '定时刷新' : '服务运行');
+    const timestamp = entry.requestStartedAt || entry.timestamp;
+    const metadata = [
+      ['请求方法', entry.requestMethod], ['订阅端点', entry.requestPath], ['IP 来源', entry.clientIpSource],
+      ['订阅类型', entry.subscriptionType], ['源域名', entry.sourceHost], ['最终域名', entry.finalHost],
+      ['User-Agent', entry.userAgent], ['HTTP 状态', entry.httpStatus], ['耗时', entry.durationMs == null ? '' : entry.durationMs + ' ms'],
+      ['响应大小', entry.responseBytes == null ? '' : entry.responseBytes + ' 字节'], ['节点数', entry.nodeCount],
+      ['Content-Type', entry.contentType], ['Content-Encoding', entry.contentEncoding], ['CF Ray', entry.cfRay],
+      ['人机验证', entry.challenge == null ? '' : (entry.challenge ? '是' : '否')],
+      ['发生重定向', entry.redirected == null ? '' : (entry.redirected ? '是' : '否')],
+      ['解析错误', entry.parserCode], ['YAML 行号', entry.parserLine], ['异常类型', entry.errorName]
+    ].filter(function (pair) { return pair[1] !== undefined && pair[1] !== null && pair[1] !== ''; });
+    return '<article class="log-entry"><div class="log-entry-heading"><span class="log-level ' + escapeHtml(entry.level) + '">' + escapeHtml(labels[entry.level] || entry.level) + '</span><strong>' + escapeHtml(title) + '</strong><time>' + escapeHtml(timestamp ? new Date(timestamp).toLocaleString('zh-CN', { hour12: false }) : '本次诊断') + '</time></div>'
+      + '<p><code>' + escapeHtml(entry.code) + '</code> ' + escapeHtml(entry.message) + '</p>'
+      + (isAccess ? '<dl class="log-access-summary"><div><dt>来源 IP</dt><dd>' + escapeHtml(entry.clientIp || '未知') + '</dd></div><div><dt>客户端 UA</dt><dd>' + escapeHtml(entry.clientUserAgent || '未提供') + '</dd></div></dl>' : '')
+      + (entry.hint ? '<p class="log-hint">' + escapeHtml(entry.hint) + '</p>' : '')
+      + (metadata.length ? '<details><summary>查看请求详情</summary><dl class="log-metadata">' + metadata.map(function (pair) { return '<div><dt>' + escapeHtml(pair[0]) + '</dt><dd>' + escapeHtml(pair[1]) + '</dd></div>'; }).join('') + '</dl></details>' : '') + '</article>';
+  }
+
+  /**
+   * 渲染错误日志与单源诊断页，复用已有控制台组件和移动端布局。
+   * @returns {string} 日志页面 HTML。
+   */
+  function renderLogsPage() {
+    const saved = JSON.parse(state.subscriptionsBaseline);
+    const options = saved.map(function (item, index) { return '<option value="' + index + '"' + (String(index) === state.diagnosticSourceIndex ? ' selected' : '') + '>' + escapeHtml(item.subName) + ' · ' + escapeHtml(item.subType) + '</option>'; }).join('');
+    const diagnosing = state.busy.has('diagnose');
+    const isAccess = state.logsCategory === 'access';
+    const actions = '<button class="button secondary" data-action="refresh-logs"' + (state.logsLoading ? ' disabled' : '') + '>刷新日志</button>';
+    const diagnosticPanel = '<section class="data-panel diagnostic-panel"><h2>订阅源诊断</h2><p class="log-hint">从当前 Worker 直接请求已保存的订阅源，最多等待 20 秒；不使用或修改正式订阅缓存。</p>'
+      + '<div class="diagnostic-controls"><label><span>已保存的订阅源</span><select id="diagnostic-source" aria-label="诊断订阅源">' + (options || '<option>暂无已保存的源</option>') + '</select></label>'
+      + '<label><span>临时 User-Agent（可选）</span><input id="diagnostic-ua" value="' + escapeHtml(state.diagnosticUserAgent) + '" placeholder="留空使用当前配置，可填写 Clash.Meta" maxlength="256" spellcheck="false"></label>'
+      + '<button class="button primary" data-action="diagnose-subscription"' + (!saved.length || diagnosing ? ' disabled' : '') + ' aria-busy="' + diagnosing + '">' + (diagnosing ? '诊断中…' : '开始诊断') + '</button></div>'
+      + '<p class="log-hint">临时 UA 只用于本次比较；诊断结果会记入日志。源配置有更改时请先保存。</p>'
+      + '<div role="status" aria-live="polite">' + (state.diagnostic ? renderLogEntry(state.diagnostic) : '') + '</div></section>';
+    const categories = [['diagnostic', '运行诊断'], ['access', '订阅访问']].map(function (item) {
+      return '<button class="button ' + (state.logsCategory === item[0] ? 'primary' : 'ghost') + '" data-action="logs-category" data-category="' + item[0] + '" aria-pressed="' + (state.logsCategory === item[0]) + '"' + (state.logsLoading ? ' disabled' : '') + '>' + item[1] + '</button>';
+    }).join('');
+    const note = isAccess ? '记录客户端拉取订阅的来源 IP、客户端 UA、访问时间和响应状态，包含缓存请求及失败请求。' : '记录抓取、解析和运行错误；成功记录来自主动诊断。';
+    return pageHeader('错误日志', state.logsLoading ? '正在读取…' : state.logs.length + ' 条已加载', 'saved', actions)
+      + '<div class="workspace-content logs-workspace">' + (!isAccess ? diagnosticPanel : '')
+      + '<section class="data-panel log-list-panel"><div class="simple-panel-head"><h2>' + (isAccess ? '订阅访问记录' : '最近诊断记录') + '</h2><span>保留 7 天 · 每页 50 条</span></div><div class="log-category-tabs" role="group" aria-label="日志分类">' + categories + '</div><p class="log-retention-note">' + note + ' KV 同步可能延迟，刚写入的记录可稍后刷新。</p>'
+      + (state.logsError ? '<p class="inline-error" role="alert">' + escapeHtml(state.logsError) + '</p>' : '')
+      + '<div class="log-list">' + (state.logs.map(renderLogEntry).join('') || '<div class="empty-list">' + (state.logsLoading ? '正在读取日志…' : state.logsError ? '日志读取失败，请点击刷新重试' : isAccess ? '暂无客户端订阅访问记录' : '暂无日志；可选择订阅源执行诊断') + '</div>') + '</div>'
+      + (state.logsCursor ? '<div class="log-pagination"><button class="button secondary" data-action="more-logs"' + (state.logsLoading ? ' disabled' : '') + '>加载更多</button></div>' : '') + '</section></div>';
+  }
+
+  /**
+   * 读取或追加一页日志；失败时保留现有记录并提供重试。
+   * @param {boolean} append 是否使用当前分页游标追加数据。
+   * @returns {Promise<void>} 完成读取并更新日志页。
+   */
+  async function refreshLogs(append) {
+    if (state.logsLoading) return;
+    state.logsLoading = true;
+    state.logsError = '';
+    if (state.activeNav === 'logs') render();
+    try {
+      const data = await api('/api/logs?category=' + encodeURIComponent(state.logsCategory) + (append && state.logsCursor ? '&cursor=' + encodeURIComponent(state.logsCursor) : ''));
+      const records = append ? state.logs.concat(data.logs) : data.logs;
+      state.logs = Array.from(new Map(records.map(function (entry) { return [entry.id, entry]; })).values());
+      state.logsCursor = data.cursor || '';
+    } catch (error) { state.logsError = error.message; }
+    finally {
+      state.logsLoading = false;
+      state.logsLoaded = true;
+      if (state.activeNav === 'logs') render();
+    }
   }
 
   /**
@@ -1060,10 +1185,11 @@ export const consoleClientScript = String.raw`
    * 在不重建当前表单的情况下刷新标题栏未保存状态和保存按钮。
    */
   function updateDirtyIndicator() {
+    if (state.activeNav === 'logs') return;
     const status = document.querySelector('.workspace-status');
     if (!status) return;
     let dirty = false;
-    if (state.activeNav === 'subscriptions') dirty = JSON.stringify(state.subscriptions) !== state.subscriptionsBaseline;
+    if (state.activeNav === 'subscriptions') dirty = JSON.stringify(state.subscriptions) !== state.subscriptionsBaseline || state.userAgent !== state.userAgentBaseline;
     else if (state.activeNav === 'nodes') dirty = state.selfNodesRaw !== state.selfNodesBaseline;
     else if (state.activeNav === 'routing') dirty = JSON.stringify(state.routing.config) !== state.routingBaseline;
     if (state.activeNav === 'nodes' && !state.selfNodeAnalysis.valid) {
@@ -1082,6 +1208,11 @@ export const consoleClientScript = String.raw`
     const saveSelector = state.activeNav === 'subscriptions' ? '[data-action="save-subscriptions"]' : state.activeNav === 'routing' ? '[data-action="save-routing"]' : '';
     const save = saveSelector ? document.querySelector(saveSelector) : null;
     if (save) save.disabled = !dirty && !(state.activeNav === 'routing' && state.routing && state.routing.migrated);
+    if (state.activeNav === 'subscriptions') {
+      if (save) save.disabled = state.busy.has('subscriptions') || JSON.stringify(state.subscriptions) === state.subscriptionsBaseline;
+      const saveUserAgent = document.querySelector('[data-action="save-subscription-settings"]');
+      if (saveUserAgent) saveUserAgent.disabled = state.busy.has('subscriptionSettings') || state.userAgent === state.userAgentBaseline;
+    }
   }
 
   /**
@@ -1090,6 +1221,13 @@ export const consoleClientScript = String.raw`
    */
   function handleWorkspaceInput(event) {
     const target = event.target;
+    if (target.id === 'global-user-agent') {
+      state.userAgent = target.value;
+      state.userAgentError = '';
+      target.removeAttribute('aria-invalid');
+      document.getElementById('global-ua-error').textContent = '';
+      return;
+    }
     const subField = target.getAttribute('data-sub-field');
     if (subField) {
       const index = Number(target.closest('[data-sub-index]').getAttribute('data-sub-index'));
@@ -1222,6 +1360,60 @@ export const consoleClientScript = String.raw`
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const action = button.getAttribute('data-action');
+
+    if (action === 'retry-application') { await loadApplication(); return; }
+    if (action === 'open-logs') { navigate('logs'); return; }
+
+    if (action === 'save-subscription-settings') {
+      if (state.busy.has('subscriptionSettings')) return;
+      const submittedUserAgent = state.userAgent;
+      state.userAgentError = '';
+      setBusy('subscriptionSettings', true);
+      try {
+        const data = await api('/api/subscriptions/settings', { method: 'PUT', body: JSON.stringify({ userAgent: submittedUserAgent }) });
+        if (state.userAgent === submittedUserAgent) state.userAgent = data.userAgent;
+        state.userAgentBaseline = data.userAgent;
+        state.defaultUserAgent = data.defaultUserAgent;
+        showToast('全局 UA 已保存', 'success', data.userAgent ? '全部订阅源使用自定义 UA，两类缓存已清理' : '已恢复代码默认值 ' + data.defaultUserAgent + '，两类缓存已清理');
+      } catch (error) {
+        state.userAgentError = (error.errors || []).find(function (issue) { return issue.path === 'userAgent'; })?.message || error.message;
+        showToast('UA 保存失败', 'error', state.userAgentError);
+      } finally {
+        setBusy('subscriptionSettings', false);
+        render();
+        if (state.activeNav === 'subscriptions' && state.userAgentError) document.getElementById('global-user-agent').focus();
+      }
+      return;
+    }
+
+    if (action === 'logs-category') {
+      const category = button.getAttribute('data-category');
+      if (state.logsLoading || category === state.logsCategory || !['diagnostic', 'access'].includes(category)) return;
+      state.logsCategory = category;
+      state.logs = [];
+      state.logsCursor = '';
+      await refreshLogs(false);
+      return;
+    }
+    if (action === 'refresh-logs' || action === 'more-logs') {
+      await refreshLogs(action === 'more-logs');
+      return;
+    }
+    if (action === 'diagnose-subscription') {
+      if (state.busy.has('diagnose')) return;
+      state.diagnosticSourceIndex = document.getElementById('diagnostic-source').value;
+      state.diagnosticUserAgent = document.getElementById('diagnostic-ua').value.trim();
+      state.busy.add('diagnose');
+      state.diagnostic = null;
+      render();
+      try {
+        const result = await api('/api/subscriptions/diagnose', { method: 'POST', body: JSON.stringify({ index: Number(state.diagnosticSourceIndex), userAgent: state.diagnosticUserAgent }) });
+        state.diagnostic = result.diagnostic;
+        await refreshLogs(false);
+      } catch (error) { showToast('诊断请求失败', 'error', error.message); }
+      finally { state.busy.delete('diagnose'); render(); }
+      return;
+    }
 
     if (action === 'add-subscription') {
       state.subscriptions.push({ subName: '', subType: '包年/包月', subUrl: '' });
@@ -1514,8 +1706,14 @@ export const consoleClientScript = String.raw`
     render();
   }
 
-  workspace.addEventListener('input', function (event) { handleWorkspaceInput(event); updateDirtyIndicator(); });
-  workspace.addEventListener('change', handleWorkspaceChange);
+  workspace.addEventListener('input', function (event) {
+    if (event.target.id === 'diagnostic-ua') { state.diagnosticUserAgent = event.target.value; return; }
+    handleWorkspaceInput(event); updateDirtyIndicator();
+  });
+  workspace.addEventListener('change', function (event) {
+    if (event.target.id === 'diagnostic-source') { state.diagnosticSourceIndex = event.target.value; return; }
+    handleWorkspaceChange(event);
+  });
   workspace.addEventListener('click', handleWorkspaceClick);
   /**
    * 为路由页主页签和策略组二级页签补齐标准方向键切换。
