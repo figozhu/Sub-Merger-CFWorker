@@ -2,6 +2,7 @@ import YAML, { isSeq } from 'yaml'
 import type { RoutingConfig } from '../types/routing'
 import { resolveProxyGroups, type GroupMatchPreview, type ProxyNode, type ResolveProxyGroupsContext } from './resolveProxyGroups'
 import { getLegacyRuleTargetName } from './routingRuleTarget'
+import { sanitizeProxyGroupDocument } from './pruneEmptyProxyGroups'
 
 /** 单次动态路由 YAML 生成结果。 */
 export interface GeneratedRoutingYaml {
@@ -108,10 +109,12 @@ export function generateRoutingYaml(config: RoutingConfig, context: ResolveProxy
   if (document.errors.length > 0) throw new Error(`YAML 模板无效：${document.errors[0].message}`)
 
   const resolved = resolveProxyGroups(config, context)
-  document.set('proxies', resolved.proxies)
-  document.set('proxy-groups', resolved.groups)
-  document.set('rule-providers', generateProviders(config))
+  // 显式创建 AST，保证后续容错处理读取到 YAMLSeq/Map，而非尚未转换的普通数组。
+  document.set('proxies', document.createNode(resolved.proxies))
+  document.set('proxy-groups', document.createNode(resolved.groups))
+  document.set('rule-providers', document.createNode(generateProviders(config)))
   setRulesWithRemarks(document, generateRules(config))
+  sanitizeProxyGroupDocument(document, config.groups.map((group) => group.name))
   return { yaml: document.toString({ lineWidth: 0 }), previews: resolved.previews }
 }
 

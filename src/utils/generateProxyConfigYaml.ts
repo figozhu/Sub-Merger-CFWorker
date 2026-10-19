@@ -2,7 +2,13 @@
 import YAML from 'yaml'
 import { filterProxyForStash } from './filterForStash';
 import { getSelfNodeData } from '../data/selfNodeData';
+import { pruneEmptyProxyGroups } from './pruneEmptyProxyGroups';
 
+/**
+ * 按旧版正则筛选节点，空正则保持原节点池。
+ * @param nodes 待筛选节点。@param pattern 名称正则。@param exclude 是否反选。
+ * @returns 保持来源顺序的筛选结果。
+ */
 function filterNodes(nodes: any[], pattern: string, exclude: boolean = false): any[] {
   if (pattern === "") {
     return nodes;
@@ -11,14 +17,16 @@ function filterNodes(nodes: any[], pattern: string, exclude: boolean = false): a
   return nodes.filter(node => exclude ? !regex.test(node.name) : regex.test(node.name))
 }
 
+/**
+ * 在正则筛选之后应用 Stash 兼容过滤，空正则也必须执行客户端过滤。
+ * @param nodes 原始节点池。@param pattern 名称正则。@param exclude 是否反选。
+ * @returns 本次 Stash YAML 真正可用的节点池，供空组判断共用。
+ */
 function filterNodesForStash(nodes: any[], pattern: string, exclude: boolean = false): any[] {
-  if (pattern === "") {
-    return nodes;
-  }
-  const regex = new RegExp(pattern);
-  return nodes.filter(node => exclude ? !regex.test(node.name) : regex.test(node.name)).filter(node => filterProxyForStash(node))
+  return filterNodes(nodes, pattern, exclude).filter(node => filterProxyForStash(node))
 }
 
+/** @param nodeNameArr 按成员顺序收集的名称。@returns 保留首次出现位置的去重结果。 */
 function uniqueNodesArr(nodeNameArr: string[]) {
   return Array.from(new Set(nodeNameArr))
 }
@@ -26,8 +34,17 @@ function uniqueNodesArr(nodeNameArr: string[]) {
 interface IProxyYamlInfo {
   normalYaml: string;
   stashYaml: string;
+  /** 裁剪前的组名，完整模板合并后据此修复下载代理和链式代理引用。 */
+  groupNames: string[];
 }
 
+/**
+ * 沿用旧版分组与正则，分别生成通用/Stash 节点段，并递归移除本次无有效成员的组。
+ * @param totalNode 当前类型的订阅节点，允许为空。
+ * @param envConfig 当前类型的正则配置。
+ * @param env 用于读取新旧 KV 自建节点的环境；缺省读取代码默认节点。
+ * @returns 不包含基础模板的两类节点 YAML，完整规则在合并模板后统一修复。
+ */
 async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<string, string>, env?: any) : Promise<IProxyYamlInfo> {
   // console.debug('generateProxyConfigYaml: envConfig', envConfig)
 
@@ -209,7 +226,7 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
     {
         name: '海外媒体',
         type: 'select',
-        proxies: uniqueNodesArr(['其它流量', ...mediaNodes.map((node: any) => node.name)]),
+        proxies: uniqueNodesArr(['其它流量', ...mediaNodesForStash.map((node: any) => node.name)]),
     },
     {
       name: 'PokerClient',
@@ -266,17 +283,18 @@ async function generateProxyConfigYaml(totalNode: any[], envConfig: Record<strin
   // 创建完整的配置对象
   const config = {
     proxies : bMergeFlag ? allowNodes : selfNodes.concat(allowNodes),
-    'proxy-groups': proxyGroups,
+    'proxy-groups': pruneEmptyProxyGroups(proxyGroups, allowNodes.map(node => node.name)).groups,
   };
 
   const configForStash = {
     proxies : bMergeFlag ? allowNodesForStash : selfNodes.concat(allowNodesForStash),
-    'proxy-groups': proxyGroupsForStash,
+    'proxy-groups': pruneEmptyProxyGroups(proxyGroupsForStash, allowNodesForStash.map(node => node.name)).groups,
   };
 
   const proxyYamlObj: IProxyYamlInfo = {
     normalYaml: YAML.stringify(config),
     stashYaml: YAML.stringify(configForStash),
+    groupNames: proxyGroups.map(group => group.name),
   }
 
   return proxyYamlObj;

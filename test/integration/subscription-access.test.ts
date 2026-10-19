@@ -4,7 +4,7 @@ import type { ErrorLogRecord } from '../../src/services/errorLogs'
 import { createSubscriptionAccessLog } from '../../src/services/subscriptionAccessLogs'
 import { generatePasswordHash } from '../../src/utils/passwordMgr'
 import { SubscriptionType } from '../../src/types/types'
-import { MockKV, createTestEnv } from '../helpers/mockKv'
+import { MockKV, createCachedYaml, createTestEnv } from '../helpers/mockKv'
 
 /** 创建带两类成功缓存的环境，验证日志不会为缓存请求额外抓取上游。 */
 function setup() {
@@ -13,7 +13,7 @@ function setup() {
   env.INSTANT_REFRESH_INTERVAL = '0'
   kv.values.set(env.TABLENAME, JSON.stringify([{ subName: '测试源', subType: SubscriptionType.Monthly, subUrl: 'https://provider.example/sub' }]))
   for (const subType of [SubscriptionType.Monthly, SubscriptionType.TrafficPackage]) {
-    kv.values.set(`${env.TABLENAME}:1:cacheObj:${subType}`, JSON.stringify({ normalYaml: 'cached-normal', stashYaml: 'cached-stash', subUserInfo: { upload: 1, download: 2, total: 100, expire: 9999999999 } }))
+    kv.values.set(`${env.TABLENAME}:1:cacheObj:${subType}`, JSON.stringify({ normalYaml: createCachedYaml('cached-normal'), stashYaml: createCachedYaml('cached-stash'), subUserInfo: { upload: 1, download: 2, total: 100, expire: 9999999999 } }))
   }
   const headers = { Cookie: 'auth=' + generatePasswordHash(env.PASSWORD, env.SALT) }
   return { kv, env, headers }
@@ -39,7 +39,7 @@ describe('客户端订阅访问日志', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const response = await app.request('https://worker.example/subscribe/magic-key?token=private-query', { headers: { 'CF-Connecting-IP': '198.51.100.10', 'X-Forwarded-For': '203.0.113.99', 'User-Agent': 'mihomo/1.19.0', 'CF-Ray': 'test-request-ray' } }, context.env)
     expect(response.status).toBe(200)
-    expect(await response.text()).toBe('cached-normal')
+    expect(await response.text()).toBe(createCachedYaml('cached-normal'))
     expect(response.headers.get('subscription-userinfo')).toContain('upload=1')
     expect(fetchMock).not.toHaveBeenCalled()
     const { logs } = await readAccessLogs(context)
@@ -65,7 +65,7 @@ describe('客户端订阅访问日志', () => {
   it('流量包及 HEAD 请求同样记录，保持 Stash 分流和 HEAD 无正文语义', async () => {
     const context = setup()
     const traffic = await app.request('/onetime/magic-key', { headers: { 'User-Agent': 'Stash/2.6' } }, context.env)
-    expect(await traffic.text()).toBe('cached-stash')
+    expect(await traffic.text()).toBe(createCachedYaml('cached-stash'))
     const head = await app.request('/subscribe/magic-key', { method: 'HEAD' }, context.env)
     expect(head.status).toBe(200)
     expect(await head.text()).toBe('')
@@ -86,15 +86,15 @@ describe('客户端订阅访问日志', () => {
     expect(JSON.stringify(logs)).not.toMatch(/private-wrong-magic|private-secret/)
   })
 
-  it('上游失败时记录客户端实际收到的 502，并与运行诊断分开读取', async () => {
+  it('上游失败时记录容错 YAML 的实际 200，并单独保留抓取失败诊断', async () => {
     const context = setup()
     context.kv.values.delete(`${context.env.TABLENAME}:1:cacheObj:${SubscriptionType.Monthly}`)
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('denied', { status: 403 }))
     const response = await app.request('/subscribe/magic-key', { headers: { 'User-Agent': 'client/1' } }, context.env)
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(200)
     const { logs } = await readAccessLogs(context)
     expect(logs).toHaveLength(1)
-    expect(logs[0]).toMatchObject({ level: 'error', httpStatus: 502, clientUserAgent: 'client/1' })
+    expect(logs[0]).toMatchObject({ level: 'info', httpStatus: 200, clientUserAgent: 'client/1' })
     const diagnostics = await app.request('/api/logs', { headers: context.headers }, context.env)
     const diagnosticLogs = (await diagnostics.json() as { data: { logs: ErrorLogRecord[] } }).data.logs
     expect(diagnosticLogs.some((log) => log.code === 'HTTP_ERROR')).toBe(true)
@@ -107,7 +107,7 @@ describe('客户端订阅访问日志', () => {
     vi.spyOn(context.kv, 'put').mockImplementation((key, value, options) => key.includes(':access-logs:') ? Promise.reject(new Error('quota exceeded')) : originalPut(key, value, options))
     const response = await app.request('/subscribe/magic-key', {}, context.env)
     expect(response.status).toBe(200)
-    expect(await response.text()).toBe('cached-normal')
+    expect(await response.text()).toBe(createCachedYaml('cached-normal'))
   })
 
   it('有 Worker 上下文时后台持久化，不阻塞客户端等待日志写入', async () => {

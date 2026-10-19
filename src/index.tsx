@@ -14,6 +14,7 @@ import { createSubscriptionAccessLog } from './services/subscriptionAccessLogs'
 import { getSubscriptionSettings, saveSubscriptionSettings, validateSubscriptionUserAgent } from './services/subscriptionSettings'
 import generateLegacyProxyConfigYaml from './utils/generateProxyConfigYaml'
 import { generateRoutingYaml, generateRoutingYamlVariants } from './utils/generateRoutingYaml'
+import { sanitizeProxyGroupYaml } from './utils/pruneEmptyProxyGroups'
 import { validateRoutingConfig } from './utils/validateRoutingConfig'
 import { getDefaultYaml, getDefaultYamlString } from './data/defaultYmal'
 import { getDefaultSelfNodeData, getSelfNodeData } from './data/selfNodeData'
@@ -57,8 +58,8 @@ type AppEnv = { Bindings: Bindings }
 /** API 请求体最大为 1 MiB，足以容纳配置，同时避免超大 JSON/YAML 消耗 Worker 资源。 */
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 
-/** 全部上游不可用且无成功缓存时，公开端点应报告 502。 */
-class SubscriptionSourcesUnavailableError extends Error {}
+/** YAML 输出容错格式版本；新缓存无需在每次请求时重复解析两份完整 YAML。 */
+const YAML_FORMAT_VERSION = 1
 
 /** 创建 Hono 应用；单独导出便于接口测试直接调用 app.request。 */
 export const app = new Hono<AppEnv>()
@@ -169,10 +170,7 @@ app.use('/subscribe/:magic', subscriptionAccessMiddleware(SubscriptionType.Month
 app.use('/onetime/:magic', subscriptionAccessMiddleware(SubscriptionType.TrafficPackage))
 
 /** 捕获未处理运行异常，日志使用固定说明，避免密码、MAGIC 和订阅地址进入堆栈。 */
-app.onError(async (error, c) => {
-  if (error instanceof SubscriptionSourcesUnavailableError) {
-    return c.req.path.startsWith('/api/') ? failure(c, 502, '所有订阅源读取失败，请查看错误日志') : c.text('所有订阅源读取失败，请登录管理页面查看错误日志', 502)
-  }
+app.onError(async (_error, c) => {
   await writeErrorLog(c.env, { level: 'error', scope: 'request', code: 'UNHANDLED_ERROR', message: '请求处理发生未捕获异常', hint: '检查 KV 绑定、配额和已保存配置；可结合 Workers 运行状态进一步排查。' })
   return c.req.path.startsWith('/api/') ? failure(c, 500, '服务处理失败，请查看错误日志和 KV 状态') : c.text('订阅处理失败，请登录管理页面查看错误日志', 500)
 })
@@ -247,48 +245,53 @@ async function loadSubscriptionNodesForPreview(subType: SubscriptionType, env: B
 }
 
 /**
- * 获取订阅完整 YAML，保留旧缓存键、无数据提示和即时刷新语义。
- * 未发布新版路由配置时严格走原生成器；发布后才使用动态路由模型。
+ * 获取订阅完整 YAML，保留旧缓存键和即时刷新语义；无源时仍生成自建节点与有效规则。
+ * 未发布新版路由配置时走旧生成器，并在完整模板合并后修复空组与失效引用。
  * @param subType 订阅类型。
  * @param env Worker 环境。
  * @param noCache 是否强制重新拉取订阅源。
+ * @param failOnUnavailableSources 定时任务使用 true，让全部抓取失败仍记录任务失败。
  * @returns 两类客户端 YAML 与流量信息。
  */
 export async function getSubYamlWithCache(
   subType: SubscriptionType,
   env: Bindings,
   noCache = false,
+  failOnUnavailableSources = false,
 ): Promise<FinalObj> {
   const cacheKey = `${env.TABLENAME}:${env.KEY_VERSION}:cacheObj:${subType}`
   const stored = await env.SUB_MERGER_KV.get<FinalObj>(cacheKey, 'json')
   // 旧 UA 产生的升级提示配置也可能已被缓存；升级后应立即重新拉取真实节点。
-  const cached = stored && !/请将 Clash Verge Rev 升级到|你现在的版本是/.test(stored.normalYaml) ? stored : null
+  let cached: FinalObj | null = null
+  if (stored && !/请将 Clash Verge Rev 升级到|你现在的版本是/.test(stored.normalYaml)) {
+    try {
+      // 历史缓存也执行同一容错逻辑；不能在命中缓存或抓取失败回退时重新暴露空组。
+      cached = stored.yamlFormatVersion === YAML_FORMAT_VERSION ? stored : {
+        ...stored, normalYaml: sanitizeProxyGroupYaml(stored.normalYaml), stashYaml: sanitizeProxyGroupYaml(stored.stashYaml),
+      }
+    } catch {
+      // 旧版“没有订阅源”注释及损坏 YAML 不能作为成功缓存，继续读取当前配置重新生成。
+    }
+  }
   if (!noCache && cached) return cached
 
   const finalObj: FinalObj = {
     subUserInfo: { upload: 0, download: 0, total: 0, expire: 9999999999 },
     normalYaml: '',
     stashYaml: '',
+    yamlFormatVersion: YAML_FORMAT_VERSION,
   }
   const subscriptions = await getSubscriptions(env)
-  if (subscriptions.length === 0) {
-    finalObj.normalYaml = '# 没有配置订阅源（通用）'
-    finalObj.stashYaml = '# 没有配置订阅源（Stash）'
-    return finalObj
-  }
   const targets = subscriptions.filter((subscription) => subscription.subType === subType)
-  if (targets.length === 0) {
-    finalObj.normalYaml = `# 没有配置该类型的订阅源（通用）：${subType}`
-    finalObj.stashYaml = `# 没有配置该类型的订阅源（Stash）：${subType}`
-    return finalObj
-  }
 
   const [subUserInfo, subscriptionNodes, fetchSummary] = await getSubscribeYaml(targets, env)
   if (fetchSummary.failedCount > 0 && cached) {
     await writeErrorLog(env, { level: 'warning', scope: 'subscription', code: 'CACHE_FALLBACK', subscriptionType: subType, message: '上游抓取不完整，继续使用上次成功缓存', hint: '查看同一时段的订阅源错误，并在日志页诊断；恢复后定时刷新会更新缓存。' })
     return cached
   }
-  if (fetchSummary.failedCount === targets.length) throw new SubscriptionSourcesUnavailableError('所有订阅源读取失败')
+  if (targets.length > 0 && fetchSummary.failedCount === targets.length && failOnUnavailableSources) {
+    throw new Error('所有订阅源读取失败')
+  }
   const patterns = subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN
   const published = await getPublishedRoutingConfig(env)
   let generated: { normalYaml: string; stashYaml: string }
@@ -304,7 +307,10 @@ export async function getSubYamlWithCache(
   } else {
     const legacy = await generateLegacyProxyConfigYaml(subscriptionNodes, patterns, env)
     const defaultYaml = await getDefaultYaml(env)
-    generated = { normalYaml: legacy.normalYaml + defaultYaml, stashYaml: legacy.stashYaml + defaultYaml }
+    generated = {
+      normalYaml: sanitizeProxyGroupYaml(legacy.normalYaml + defaultYaml, legacy.groupNames),
+      stashYaml: sanitizeProxyGroupYaml(legacy.stashYaml + defaultYaml, legacy.groupNames),
+    }
   }
 
   const updatedAt = dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')
@@ -549,7 +555,7 @@ app.post('/api/config', async (c) => {
 /** 定时任务继续强制刷新包月与流量包两类正式缓存。 */
 async function scheduled(_controller: ScheduledController, env: Bindings): Promise<void> {
   const results = await Promise.allSettled([SubscriptionType.TrafficPackage, SubscriptionType.Monthly].map(async (subType) => {
-    try { await getSubYamlWithCache(subType, env, true) } catch {
+    try { await getSubYamlWithCache(subType, env, true, true) } catch {
       await writeErrorLog(env, { level: 'error', scope: 'scheduled', code: 'SCHEDULED_REFRESH_FAILED', subscriptionType: subType, message: '定时订阅刷新失败', hint: '检查对应订阅源的错误日志和 KV 状态。' })
       throw new Error('定时订阅刷新失败')
     }

@@ -52,3 +52,8 @@ export function createTestEnv(kv = new MockKV()): any {
     SUBSCRIBE_PATTERN: { ...emptyPatterns }, ONETIME_PATTERN: { ...emptyPatterns },
   }
 }
+
+/** @param label 区分通用与 Stash 的测试标签。@returns 可直接命中的最小合法订阅缓存。 */
+export function createCachedYaml(label: string): string {
+  return `# ${label}\nproxies: []\nproxy-groups: []\nrules:\n  - MATCH,REJECT\n`
+}

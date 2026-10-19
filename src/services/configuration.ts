@@ -46,7 +46,7 @@ function isHttpUrl(value: string): boolean {
 
 /**
  * 校验并规范化整组订阅源。
- * 首期保持至少一条订阅源的旧接口约束，并保留重复名称或 URL 的原有语义。
+ * 允许保存空数组以支持仅自建节点；非数组仍拒绝，并保留重复名称或 URL 的原有语义。
  * @param input 请求中的未知数据。
  * @returns 规范化订阅数组以及所有字段错误。
  */
@@ -55,10 +55,10 @@ export function normalizeSubscriptions(input: unknown): {
   errors: ConfigurationIssue[]
 } {
   const errors: ConfigurationIssue[] = []
-  if (!Array.isArray(input) || input.length === 0) {
+  if (!Array.isArray(input)) {
     return {
       subscriptions: [],
-      errors: [{ code: 'SUBSCRIPTIONS_EMPTY', path: 'subscriptions', message: '至少需要保留一条订阅源' }],
+      errors: [{ code: 'SUBSCRIPTIONS_NOT_ARRAY', path: 'subscriptions', message: '订阅源必须是数组，可使用空数组' }],
     }
   }
 

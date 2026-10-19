@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import worker, { app, getSubYamlWithCache } from '../../src/index'
+import YAML from 'yaml'
 import { generatePasswordHash } from '../../src/utils/passwordMgr'
 import { SubscriptionType } from '../../src/types/types'
-import { MockKV, createTestEnv } from '../helpers/mockKv'
+import { MockKV, createCachedYaml, createTestEnv } from '../helpers/mockKv'
 
 /** @param env 测试环境。@returns 带认证的 JSON 请求头。 */
 function headers(env: ReturnType<typeof createTestEnv>): Record<string, string> {
@@ -67,7 +68,7 @@ describe('错误日志与诊断接口', () => {
   it('强制刷新全部失败时保留上次成功缓存，仍有具体失败日志', async () => {
     const { kv, env } = setup()
     const key = `${env.TABLENAME}:1:cacheObj:${SubscriptionType.Monthly}`
-    const cache = { normalYaml: 'last-good-normal', stashYaml: 'last-good-stash', subUserInfo: { upload: 1, download: 2, total: 100, expire: 9999999999 } }
+    const cache = { normalYaml: createCachedYaml('last-good-normal'), stashYaml: createCachedYaml('last-good-stash'), subUserInfo: { upload: 1, download: 2, total: 100, expire: 9999999999 } }
     kv.values.set(key, JSON.stringify(cache))
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('denied', { status: 403 }))
     expect(await getSubYamlWithCache(SubscriptionType.Monthly, env, true)).toEqual(cache)
@@ -76,11 +77,15 @@ describe('错误日志与诊断接口', () => {
     expect(codes).toEqual(expect.arrayContaining(['HTTP_ERROR', 'CACHE_FALLBACK']))
   })
 
-  it('无成功缓存且全部失败时公开端点报错，不缓存空配置', async () => {
+  it('无成功缓存且全部失败时返回完整容错 YAML，不缓存失败结果', async () => {
     const { kv, env } = setup()
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('denied', { status: 403 }))
     const response = await app.request('/subscribe/magic-key', {}, env)
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(200)
+    const config = YAML.parse(await response.text())
+    expect(config.proxies).toEqual([])
+    expect(config.rules).toContain('MATCH,REJECT')
+    expect(config['proxy-groups'].every((group: { proxies: string[] }) => group.proxies.length > 0)).toBe(true)
     expect(kv.values.has(`${env.TABLENAME}:1:cacheObj:${SubscriptionType.Monthly}`)).toBe(false)
   })
 

@@ -17,4 +17,6 @@ export interface FinalObj {
   subUserInfo: SubUserInfo
   normalYaml: string
   stashYaml: string
+  /** 当前代码已完成 YAML 容错处理的版本；旧缓存缺失该字段时先修复再返回。 */
+  yamlFormatVersion?: number
 }

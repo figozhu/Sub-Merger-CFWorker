@@ -6,6 +6,7 @@ import { createLegacyProxyGroups, createLegacyRoutingConfig } from '../../src/co
 import { getDefaultYamlString } from '../../src/data/defaultYmal'
 import { getSelfNodeData } from '../../src/data/selfNodeData'
 import { validateRoutingConfig } from '../../src/utils/validateRoutingConfig'
+import { sanitizeProxyGroupYaml } from '../../src/utils/pruneEmptyProxyGroups'
 import { MockKV, createTestEnv } from '../helpers/mockKv'
 
 /** 创建能覆盖全局排除、各主要组、同名节点和自建节点的固定输入。 */
@@ -69,7 +70,7 @@ rules:
     expect(migration.config?.rules[0].targetGroupId).toBe(etherFiGroup?.id)
     expect(validateRoutingConfig(migration.config).errors).toEqual([])
 
-    const generated = generateRoutingYamlVariants(migration.config!, [], [], 'monthly', '').normalYaml
+    const generated = generateRoutingYamlVariants(migration.config!, fixtureNodes(), [], 'monthly', '').normalYaml
     expect(YAML.parse(generated).rules).toEqual([
       'DOMAIN-SUFFIX,ether.fi,EtherFi,no-resolve',
       'MATCH,其它流量',
@@ -102,8 +103,8 @@ rules:
         expect(migration.errors).toEqual([])
         const selfNodes = await getSelfNodeData(env)
         const dynamic = generateRoutingYamlVariants(migration.config!, fixtureNodes(), selfNodes, output, patterns.EXCLUDE_PATTERN)
-        expect(parsed(dynamic.normalYaml)).toEqual(parsed(legacy.normalYaml + getDefaultYamlString()))
-        expect(parsed(dynamic.stashYaml)).toEqual(parsed(legacy.stashYaml + getDefaultYamlString()))
+        expect(parsed(dynamic.normalYaml)).toEqual(parsed(sanitizeProxyGroupYaml(legacy.normalYaml + getDefaultYamlString())))
+        expect(parsed(dynamic.stashYaml)).toEqual(parsed(sanitizeProxyGroupYaml(legacy.stashYaml + getDefaultYamlString())))
       })
     }
   }

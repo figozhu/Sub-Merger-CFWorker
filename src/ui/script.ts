@@ -241,7 +241,6 @@ export const consoleClientScript = String.raw`
       } catch (_) { row.subUrl = '请输入有效地址'; }
       if (Object.keys(row).length) errors[index] = row;
     });
-    if (!state.subscriptions.length) errors.global = { message: '至少需要保留一条订阅源' };
     state.subscriptionErrors = errors;
     return Object.keys(errors).length === 0;
   }
@@ -332,7 +331,7 @@ export const consoleClientScript = String.raw`
       + '<div class="workspace-content">' + renderGlobalUserAgent() + '<section class="data-panel subscription-panel">'
       + (state.subscriptionErrors.global ? '<div class="inline-error">' + escapeHtml(state.subscriptionErrors.global.message) + '</div>' : '')
       + '<div class="data-table-wrap"><table class="data-table subscription-table"><thead><tr><th>名称</th><th>类型</th><th>订阅地址</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-      + (!state.subscriptions.length ? '<div class="empty-state"><strong>还没有订阅源</strong><button class="button primary" data-action="add-subscription">添加订阅源</button></div>' : '')
+      + (!state.subscriptions.length ? '<div class="empty-state"><strong>还没有订阅源</strong><p>可仅使用自建节点，输出时会自动省略空策略组。</p><button class="button primary" data-action="add-subscription">添加订阅源</button></div>' : '')
       + '</section></div>';
   }
 

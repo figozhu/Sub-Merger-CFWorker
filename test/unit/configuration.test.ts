@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { analyzeSelfNodes, normalizeSubscriptions } from '../../src/services/configuration'
 
 describe('订阅源与自建节点校验', () => {
+  it('允许清空订阅源，但拒绝非数组输入', () => {
+    expect(normalizeSubscriptions([])).toEqual({ subscriptions: [], errors: [] })
+    for (const input of [null, undefined, {}, '[]']) {
+      expect(normalizeSubscriptions(input).errors[0].code).toBe('SUBSCRIPTIONS_NOT_ARRAY')
+    }
+  })
+
   it('订阅源去除首尾空格并只接受 HTTP(S)', () => {
     const result = normalizeSubscriptions([{ subName: ' 主力 ', subType: '包年/包月', subUrl: ' https://example.com/sub ' }])
     expect(result.errors).toEqual([])

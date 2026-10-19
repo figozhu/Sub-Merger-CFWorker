@@ -1,5 +1,6 @@
 import { filterProxyForStash } from './filterForStash'
 import type { OutputScope, ProxyGroupConfig, RoutingConfig } from '../types/routing'
+import { pruneEmptyProxyGroups } from './pruneEmptyProxyGroups'
 
 /** 任意 Clash 节点对象；只有 name 是策略组解析的必需字段。 */
 export type ProxyNode = Record<string, unknown> & { name: string }
@@ -142,5 +143,13 @@ export function resolveProxyGroups(config: RoutingConfig, context: ResolveProxyG
     return resolved
   })
 
-  return { proxies: allNodes, groups, previews }
+  // 必须在所有组完成匹配后递归裁剪，才能处理向后引用及父组随子组一起变空的情况。
+  const pruned = pruneEmptyProxyGroups(groups, allNodes.map((node) => node.name))
+  const membersByName = new Map(pruned.groups.map((group) => [group.name, group.proxies as string[]]))
+  previews.forEach((preview, index) => {
+    const members = membersByName.get(visibleGroups[index].name) ?? []
+    preview.count = members.length
+    preview.names = members.slice(0, 8)
+  })
+  return { proxies: allNodes, groups: pruned.groups, previews }
 }
