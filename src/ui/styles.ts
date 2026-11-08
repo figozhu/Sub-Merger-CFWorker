@@ -2322,9 +2322,17 @@ textarea.code-input {
   min-height: 0;
   flex: 1;
   overflow: auto;
+  /* 重绘后由脚本恢复位置，避免浏览器滚动锚定再次调整同一容器。 */
+  overflow-anchor: none;
   background: #f7f8fb;
   scrollbar-width: thin;
   scrollbar-color: #c9d0dc transparent;
+}
+
+.studio-content,
+.unified-group-list .entity-list {
+  /* 窄屏外层与策略组列表也参与位置恢复。 */
+  overflow-anchor: none;
 }
 
 .nested-group-settings {
@@ -3634,6 +3642,12 @@ textarea.code-input {
 
   .studio-grid > .unified-group-editor {
     min-height: 780px;
+  }
+
+  .studio-grid > .unified-group-editor,
+  .unified-group-editor .unified-editor-scroll {
+    /* 窄屏统一由外层滚动，让选中规则操作栏随列表吸顶，连续移动无需返回列表开头。 */
+    overflow: visible;
   }
 
   .studio-grid > .inspector-panel {

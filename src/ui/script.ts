@@ -18,6 +18,8 @@ export const consoleClientScript = String.raw`
   let overlayReturnFocus = null;
   /** 完整预览生成新节点摘要后，关闭浮层时需要重绘后台页面。 */
   let overlayNeedsRender = false;
+  /** 上次渲染的路由视图标识，用于区分原地编辑和主动切换策略组/搜索范围。 */
+  let renderedRoutingView = null;
 
   /** 控制台全部可变状态；只保存真实 API 数据和当前编辑状态。 */
   const state = {
@@ -507,16 +509,13 @@ export const consoleClientScript = String.raw`
     const groupRules = getRulesForGroup(group.id);
     const scopedRules = state.groupRuleScope === 'global' ? rules : groupRules;
     const keyword = state.ruleQuery.trim().toLowerCase();
-    const visibleRules = scopedRules.filter(function (rule) {
-      return !keyword || [rule.type, rule.value, rule.category, rule.remark].join(' ').toLowerCase().indexOf(keyword) >= 0;
-    });
+    const visibleRules = scopedRules.filter(matchesRuleQuery);
     const selectedRule = rules.find(function (rule) { return rule.id === state.selectedRuleId; });
-    const selectedVisible = Boolean(selectedRule && scopedRules.some(function (rule) { return rule.id === selectedRule.id; }));
+    const selectedVisible = Boolean(selectedRule && visibleRules.some(function (rule) { return rule.id === selectedRule.id; }));
     const selectedGlobalIndex = selectedRule ? rules.findIndex(function (rule) { return rule.id === selectedRule.id; }) : -1;
     const selectedScopeIndex = selectedRule ? scopedRules.findIndex(function (rule) { return rule.id === selectedRule.id; }) : -1;
-    const selectedIsFinalMatch = Boolean(selectedRule && selectedRule.enabled && selectedRule.type === 'MATCH');
+    const previousScopeRule = selectedScopeIndex > 0 ? scopedRules[selectedScopeIndex - 1] : null;
     const nextScopeRule = selectedScopeIndex >= 0 ? scopedRules[selectedScopeIndex + 1] : null;
-    const moveDownWouldCrossMatch = Boolean(nextScopeRule && nextScopeRule.enabled && nextScopeRule.type === 'MATCH');
     const rows = visibleRules.map(function (rule) {
       const index = rules.findIndex(function (item) { return item.id === rule.id; });
       const valueControl = rule.type === 'MATCH'
@@ -528,7 +527,7 @@ export const consoleClientScript = String.raw`
       const targetControl = showTargetControl
         ? '<select class="nested-rule-target" data-rule-field="targetGroupId" data-rule-index="' + index + '" aria-label="目标策略">' + groupOptions(rule.targetGroupId, '') + '</select>'
         : '';
-      return '<article class="nested-rule-record ' + (state.selectedRuleId === rule.id ? 'selected ' : '') + (!rule.enabled ? 'disabled' : '') + '"><div class="nested-rule-primary ' + (showTargetControl ? 'with-target' : '') + '">'
+      return '<article data-rule-id="' + escapeHtml(rule.id) + '" class="nested-rule-record ' + (state.selectedRuleId === rule.id ? 'selected ' : '') + (!rule.enabled ? 'disabled' : '') + '"><div class="nested-rule-primary ' + (showTargetControl ? 'with-target' : '') + '">'
         + '<button class="rule-order-button" data-action="select-rule" data-id="' + escapeHtml(rule.id) + '" aria-label="选择第 ' + (index + 1) + ' 条规则">#' + String(index + 1).padStart(2, '0') + '</button>'
         + '<label class="nested-rule-enable" title="启用规则"><input type="checkbox" data-rule-field="enabled" data-rule-index="' + index + '"' + (rule.enabled ? ' checked' : '') + ' aria-label="启用规则"></label>'
         + '<select class="nested-rule-type" data-rule-field="type" data-rule-index="' + index + '" aria-label="规则类型">' + ruleTypeOptions(rule.type) + '</select>'
@@ -540,7 +539,7 @@ export const consoleClientScript = String.raw`
       ? '<div class="selected-rule-toolbar" role="toolbar" aria-label="选中规则操作"><div><span>已选</span><strong>#' + String(selectedGlobalIndex + 1).padStart(2, '0') + ' · ' + escapeHtml(selectedRule.type) + '</strong></div><div class="selected-rule-actions">'
         + '<button data-action="insert-rule-above" data-id="' + escapeHtml(selectedRule.id) + '">上方插入</button><button data-action="insert-rule-below" data-id="' + escapeHtml(selectedRule.id) + '">下方插入</button>'
         + '<button data-action="duplicate-rule" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedRule.type === 'MATCH' ? ' disabled' : '') + '>复制</button>'
-        + '<button data-action="move-selected-rule-up" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedScopeIndex <= 0 || selectedIsFinalMatch ? ' disabled' : '') + '>上移</button><button data-action="move-selected-rule-down" data-id="' + escapeHtml(selectedRule.id) + '"' + (selectedScopeIndex < 0 || selectedScopeIndex >= scopedRules.length - 1 || moveDownWouldCrossMatch ? ' disabled' : '') + '>下移</button>'
+        + '<button data-action="move-selected-rule-up" data-id="' + escapeHtml(selectedRule.id) + '"' + (!previousScopeRule || !canSwapRoutingRules(selectedRule, previousScopeRule) ? ' disabled' : '') + '>上移</button><button data-action="move-selected-rule-down" data-id="' + escapeHtml(selectedRule.id) + '"' + (!nextScopeRule || !canSwapRoutingRules(selectedRule, nextScopeRule) ? ' disabled' : '') + '>下移</button>'
         + '<button class="danger" data-action="delete-rule" data-index="' + selectedGlobalIndex + '">删除</button></div></div>'
       : '<div class="rule-selection-hint">点击规则序号选中记录，即可在其上方或下方插入。</div>';
     const empty = keyword
@@ -699,9 +698,121 @@ export const consoleClientScript = String.raw`
   }
 
   /**
-   * 根据当前 Hash 渲染页面并同步侧栏选中状态。
+   * 获取当前路由编辑上下文；搜索、分组或范围变化时，不恢复旧规则列表的滚动。
+   * @returns {object|null} 路由视图标识，离开路由页时返回 null。
    */
-  function render() {
+  function getRoutingView() {
+    if (state.activeNav !== 'routing') return null;
+    return { tab: state.routingTab, group: JSON.stringify([state.selectedGroupId, state.groupPane, state.groupRuleScope, state.ruleQuery]) };
+  }
+
+  /**
+   * 按稳定 ID 查找已渲染规则，避免排序后数组索引变化或用户 ID 破坏选择器。
+   * @param {string} ruleId 规则稳定 ID。
+   * @returns {HTMLElement|undefined} 当前可见列表内的规则元素。
+   */
+  function findRuleElement(ruleId) {
+    return Array.from(workspace.querySelectorAll('[data-rule-id]')).find(function (row) { return row.getAttribute('data-rule-id') === ruleId; });
+  }
+
+  /**
+   * 在替换 DOM 前保存路由各层滚动和焦点描述，不持有即将失效的 DOM 引用。
+   * @returns {object|null} 重绘快照；首次进入路由页时没有可恢复内容。
+   */
+  function captureRoutingView() {
+    if (!renderedRoutingView || !getRoutingView()) return null;
+    const active = document.activeElement;
+    const row = active && active.closest('[data-rule-id]');
+    const focus = active && workspace.contains(active) ? {
+      id: active.id,
+      ruleId: row && row.getAttribute('data-rule-id'),
+      field: active.getAttribute('data-rule-field'),
+      action: active.getAttribute('data-action'),
+      toolbar: Boolean(active.closest('.selected-rule-toolbar')),
+      start: active.selectionStart,
+      end: active.selectionEnd,
+    } : null;
+    const scrolls = ['#routing-tab-panel', '.unified-group-list .entity-list', '#group-pane-panel'].map(function (selector) {
+      const element = workspace.querySelector(selector);
+      return element ? { selector: selector, top: element.scrollTop, left: element.scrollLeft } : null;
+    }).filter(Boolean);
+    return { view: renderedRoutingView, scrolls: scrolls, focus: focus };
+  }
+
+  /**
+   * 最小幅度滚动规则的可滚动祖先，同时避开吸顶操作栏；兼容窄屏外层滚动。
+   * @param {HTMLElement} row 需要显示的规则记录。
+   * @returns {void} 只调整位置，不改变选中记录和键盘焦点。
+   */
+  function revealRoutingRule(row) {
+    const toolbar = workspace.querySelector('.selected-rule-toolbar');
+    for (let parent = row.parentElement; parent && workspace.contains(parent); parent = parent.parentElement) {
+      if (!/(auto|scroll)/.test(getComputedStyle(parent).overflowY) || parent.clientHeight === 0 || parent.scrollHeight <= parent.clientHeight) continue;
+      const bounds = parent.getBoundingClientRect();
+      const top = bounds.top + parent.clientTop + 8 + (toolbar && parent.contains(toolbar) ? toolbar.offsetHeight : 0);
+      const bottom = bounds.top + parent.clientTop + parent.clientHeight - 8;
+      const rect = row.getBoundingClientRect();
+      if (rect.top < top) parent.scrollTop += rect.top - top;
+      else if (rect.bottom > bottom) parent.scrollTop += Math.min(rect.top - top, rect.bottom - bottom);
+    }
+  }
+
+  /**
+   * 恢复同一编辑上下文的位置，并按显式操作意图显示/聚焦规则。
+   * @param {object|null} snapshot 重绘前快照。
+   * @param {{revealRuleId?:string,focusRule?:boolean}} options 新建/复制聚焦内容；移动保留操作按钮焦点。
+   * @returns {void} 焦点使用 preventScroll，避免浏览器再次把列表拉回顶部。
+   */
+  function restoreRoutingView(snapshot, options) {
+    const view = getRoutingView();
+    const sameTab = snapshot && view && snapshot.view.tab === view.tab;
+    const sameGroup = sameTab && snapshot.view.group === view.group;
+    if (sameTab) snapshot.scrolls.forEach(function (scroll) {
+      if (scroll.selector === '#group-pane-panel' && !sameGroup) return;
+      const element = workspace.querySelector(scroll.selector);
+      if (element) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }
+    });
+    let focus = null;
+    const saved = snapshot && snapshot.focus;
+    if (sameGroup && saved) {
+      if (saved.id) focus = document.getElementById(saved.id);
+      else {
+        const root = saved.ruleId ? findRuleElement(saved.ruleId) : saved.toolbar ? workspace.querySelector('.selected-rule-toolbar') : null;
+        if (root) focus = Array.from(root.querySelectorAll('[data-rule-field], [data-action]')).find(function (element) {
+          return saved.field ? element.getAttribute('data-rule-field') === saved.field : element.getAttribute('data-action') === saved.action;
+        });
+      }
+      if (focus && !focus.disabled) {
+        focus.focus({ preventScroll: true });
+        if (saved.start != null && saved.end != null && focus.setSelectionRange) focus.setSelectionRange(saved.start, saved.end);
+      }
+    }
+    const row = options.revealRuleId && findRuleElement(options.revealRuleId);
+    if (row) {
+      revealRoutingRule(row);
+      if (options.focusRule) {
+        focus = row.querySelector('.nested-rule-value') || row.querySelector('.rule-order-button');
+        if (focus) {
+          focus.focus({ preventScroll: true });
+          if (focus instanceof HTMLInputElement) focus.select();
+        }
+      } else if (!focus || focus.disabled) {
+        row.querySelector('.rule-order-button').focus({ preventScroll: true });
+      }
+    } else if (sameTab && saved && (saved.ruleId || saved.toolbar) && (!focus || focus.disabled)) {
+      // 删除最后一个结果或更改类型导致记录被过滤时，仍给键盘用户一个明确的继续操作入口。
+      const search = document.getElementById('rule-search');
+      if (search) search.focus({ preventScroll: true });
+    }
+  }
+
+  /**
+   * 根据当前 Hash 渲染页面，同步导航并恢复原地编辑的滚动和焦点。
+   * @param {{revealRuleId?:string,focusRule?:boolean}} options 可选规则定位意图。
+   * @returns {void} 主动切换页面/分组时不继承旧规则滚动。
+   */
+  function render(options) {
+    const routingSnapshot = captureRoutingView();
     document.querySelectorAll('[data-nav]').forEach(function (item) {
       const active = item.getAttribute('data-nav') === state.activeNav;
       item.classList.toggle('active', active);
@@ -717,6 +828,8 @@ export const consoleClientScript = String.raw`
     else if (state.activeNav === 'logs') workspace.innerHTML = renderLogsPage();
     else workspace.innerHTML = renderOutputsPage();
     bindEditorScroll();
+    restoreRoutingView(routingSnapshot, options || {});
+    renderedRoutingView = getRoutingView();
     if (state.activeNav === 'logs' && !state.logsLoaded && !state.logsLoading) refreshLogs(false);
   }
 
@@ -846,6 +959,56 @@ export const consoleClientScript = String.raw`
   }
 
   /**
+   * 对显示和操作使用相同的搜索条件，避免工具栏指向被过滤掉的规则。
+   * @param {object} rule 待判断的规则。
+   * @returns {boolean} 是否匹配当前搜索；空搜索匹配所有规则。
+   */
+  function matchesRuleQuery(rule) {
+    const keyword = state.ruleQuery.trim().toLowerCase();
+    return !keyword || [rule.type, rule.value, rule.category, rule.remark].join(' ').toLowerCase().indexOf(keyword) >= 0;
+  }
+
+  /**
+   * 完成新增或复制后显示新记录；仅当搜索会隐藏新记录时清除搜索并解释原因。
+   * @param {object} rule 已插入配置的新规则。
+   * @returns {void} 聚焦匹配内容/提供者，让用户可以立即修改。
+   */
+  function editCreatedRoutingRule(rule) {
+    const clearedQuery = !matchesRuleQuery(rule);
+    if (clearedQuery) state.ruleQuery = '';
+    state.selectedRuleId = rule.id;
+    render({ revealRuleId: rule.id, focusRule: true });
+    if (clearedQuery) showToast('已清除规则搜索', 'success', '显示刚创建的规则，方便继续编辑');
+  }
+
+  /**
+   * 限制启用的新规则位于最终 MATCH 之前，包括从 MATCH 后禁用记录发起的插入。
+   * @param {number} index 原计划插入的全局位置。
+   * @returns {number} 不越过最终启用 MATCH 的插入位置。
+   */
+  function routingInsertIndex(index) {
+    const matchIndex = state.routing.config.rules.findIndex(function (rule) { return rule.enabled && rule.type === 'MATCH'; });
+    return matchIndex < 0 ? index : Math.min(index, matchIndex);
+  }
+
+  /**
+   * 检查交换两个规则是否会让启用规则跨越最终 MATCH；组内视图也检查隐藏组的 MATCH。
+   * @param {object} source 待移动规则。
+   * @param {object} target 交换位置的规则。
+   * @returns {boolean} 可以安全交换时为 true；最终启用 MATCH 固定不参与交换。
+   */
+  function canSwapRoutingRules(source, target) {
+    const rules = state.routing.config.rules;
+    const matchIndex = rules.findIndex(function (rule) { return rule.enabled && rule.type === 'MATCH'; });
+    if (matchIndex < 0) return true;
+    const sourceIndex = rules.indexOf(source);
+    const targetIndex = rules.indexOf(target);
+    if (sourceIndex === matchIndex || targetIndex === matchIndex) return false;
+    return !(source.enabled && sourceIndex < matchIndex && targetIndex > matchIndex)
+      && !(target.enabled && targetIndex < matchIndex && sourceIndex > matchIndex);
+  }
+
+  /**
    * 在当前策略组最后一条归属规则之后添加新规则。
    *
    * 启用的 MATCH 永远保持在新规则之后，防止一次快捷操作立即制造无效顺序。
@@ -862,9 +1025,8 @@ export const consoleClientScript = String.raw`
     if (matchIndex >= 0) insertIndex = Math.min(insertIndex, matchIndex);
     const rule = createDefaultRoutingRule(targetGroupId, 'general');
     rules.splice(insertIndex, 0, rule);
-    state.selectedRuleId = rule.id;
     state.groupPane = 'rules';
-    render();
+    editCreatedRoutingRule(rule);
     showToast('已添加分流规则', 'success', selectedGroup ? '目标自动设置为“' + selectedGroup.name + '”' : '已放在最终 MATCH 之前');
   }
 
@@ -886,11 +1048,12 @@ export const consoleClientScript = String.raw`
       ? state.selectedGroupId
       : anchor.targetGroupId;
     const rule = createDefaultRoutingRule(targetGroupId, anchor.category || 'general');
-    const insertIndex = anchor.type === 'MATCH' ? anchorIndex : anchorIndex + (position === 'below' ? 1 : 0);
+    const requestedIndex = anchor.type === 'MATCH' ? anchorIndex : anchorIndex + (position === 'below' ? 1 : 0);
+    const insertIndex = routingInsertIndex(requestedIndex);
     rules.splice(insertIndex, 0, rule);
-    state.selectedRuleId = rule.id;
-    render();
-    showToast(position === 'above' ? '已在上方插入规则' : '已在下方插入规则', 'success', '目标策略已自动继承');
+    editCreatedRoutingRule(rule);
+    const keptBeforeMatch = insertIndex < requestedIndex || (anchor.type === 'MATCH' && position === 'below');
+    showToast(keptBeforeMatch ? '已在最终 MATCH 上方插入规则' : position === 'above' ? '已在上方插入规则' : '已在下方插入规则', 'success', '目标策略已自动继承');
   }
 
   /**
@@ -911,9 +1074,8 @@ export const consoleClientScript = String.raw`
     const copy = clone(source);
     copy.id = createId('rule');
     copy.remark = source.remark ? source.remark + '（副本）' : '';
-    rules.splice(sourceIndex + 1, 0, copy);
-    state.selectedRuleId = copy.id;
-    render();
+    rules.splice(copy.enabled ? routingInsertIndex(sourceIndex + 1) : sourceIndex + 1, 0, copy);
+    editCreatedRoutingRule(copy);
     showToast('规则已复制', 'success', '副本已插入原记录下方');
   }
 
@@ -939,14 +1101,15 @@ export const consoleClientScript = String.raw`
     if (targetIndex == null) return;
     const sourceRule = rules[sourceIndex];
     const targetRule = rules[targetIndex];
-    if ((sourceRule.enabled && sourceRule.type === 'MATCH' && delta < 0) || (targetRule.enabled && targetRule.type === 'MATCH' && delta > 0)) {
+    if (!canSwapRoutingRules(sourceRule, targetRule)) {
       showToast('最终 MATCH 必须保持在末尾', 'warning', '请在 MATCH 上方调整其它规则');
       return;
     }
     const temporary = rules[sourceIndex];
     rules[sourceIndex] = rules[targetIndex];
     rules[targetIndex] = temporary;
-    render();
+    state.selectedRuleId = ruleId;
+    render({ revealRuleId: ruleId });
   }
 
   /**
@@ -1293,6 +1456,10 @@ export const consoleClientScript = String.raw`
    */
   function handleWorkspaceChange(event) {
     const target = event.target;
+    // input 事件可能已经更新了目标组，邻居必须从尚未重绘的 DOM 顺序读取。
+    const editedRow = target.closest('[data-rule-id]');
+    const visibleRuleIds = Array.from(workspace.querySelectorAll('[data-rule-id]')).map(function (row) { return row.getAttribute('data-rule-id'); });
+    const editedRowIndex = editedRow ? visibleRuleIds.indexOf(editedRow.getAttribute('data-rule-id')) : -1;
     const groupField = target.getAttribute('data-group-field');
     if (groupField === 'enabled' && !target.checked) {
       const group = state.routing.config.groups.find(function (item) { return item.id === state.selectedGroupId; });
@@ -1323,6 +1490,7 @@ export const consoleClientScript = String.raw`
       render();
     }
     const ruleField = target.getAttribute('data-rule-field');
+    if (ruleField === 'enabled') render();
     if (ruleField === 'type') {
       const rule = state.routing.config.rules[Number(target.getAttribute('data-rule-index'))];
       if (rule.type === 'MATCH') { rule.value = ''; delete rule.providerId; rule.noResolve = false; }
@@ -1341,12 +1509,14 @@ export const consoleClientScript = String.raw`
           const nextRule = getRulesForGroup(state.selectedGroupId)[0];
           state.selectedRuleId = destinationGroup && rule ? rule.id : (nextRule ? nextRule.id : '');
         } else if (state.groupRuleScope === 'group') {
-          state.selectedRuleId = remainingRules.some(function (item) { return item.id === state.selectedRuleId; })
-            ? state.selectedRuleId
-            : remainingRules[0].id;
+          const remainingIds = new Set(remainingRules.filter(matchesRuleQuery).map(function (item) { return item.id; }));
+          const nextId = visibleRuleIds.slice(editedRowIndex + 1).find(function (id) { return remainingIds.has(id); })
+            || visibleRuleIds.slice(0, editedRowIndex).reverse().find(function (id) { return remainingIds.has(id); });
+          if (!remainingIds.has(state.selectedRuleId) || !remainingIds.has(rule.id)) state.selectedRuleId = nextId || '';
         }
       }
-      render();
+      const ruleStillVisible = state.groupRuleScope === 'global' || getRulesForGroup(state.selectedGroupId).some(function (item) { return item.id === rule.id; });
+      render({ revealRuleId: ruleStillVisible ? rule.id : state.selectedRuleId });
       if (destinationGroup) showToast('规则已归组', 'success', '目标已改为“' + destinationGroup.name + '”');
     }
   }
@@ -1481,7 +1651,7 @@ export const consoleClientScript = String.raw`
       state.selectedRuleId = firstRule ? firstRule.id : '';
       render();
       const selectedGroupButton = workspace.querySelector('[data-action="select-group"][data-id="' + state.selectedGroupId + '"]');
-      if (selectedGroupButton) selectedGroupButton.focus();
+      if (selectedGroupButton) selectedGroupButton.focus({ preventScroll: true });
     } else if (action === 'group-pane') {
       state.groupPane = button.getAttribute('data-pane');
       render();
@@ -1496,7 +1666,7 @@ export const consoleClientScript = String.raw`
       render();
     } else if (action === 'select-rule') {
       state.selectedRuleId = button.getAttribute('data-id');
-      render();
+      render({ revealRuleId: state.selectedRuleId });
     } else if (action === 'move-group-up' || action === 'move-group-down') {
       moveItem(state.routing.config.groups, Number(button.getAttribute('data-index')), action === 'move-group-up' ? -1 : 1);
       render();
@@ -1564,23 +1734,24 @@ export const consoleClientScript = String.raw`
     } else if (action === 'delete-rule') {
       const index = Number(button.getAttribute('data-index'));
       const removed = state.routing.config.rules[index];
+      // 先记录当前可见邻居，再删除；保留用户正在处理的局部位置。
+      const visibleRules = (state.groupRuleScope === 'global' ? state.routing.config.rules : getRulesForGroup(state.selectedGroupId)).filter(matchesRuleQuery);
+      const visibleIndex = visibleRules.findIndex(function (rule) { return rule === removed; });
+      const neighbor = visibleRules[visibleIndex + 1] || visibleRules[visibleIndex - 1];
       state.routing.config.rules.splice(index, 1);
-      const remainingScopeRules = state.groupRuleScope === 'global'
-        ? state.routing.config.rules
-        : getRulesForGroup(state.selectedGroupId);
-      state.selectedRuleId = remainingScopeRules[0] ? remainingScopeRules[0].id : '';
+      state.selectedRuleId = neighbor ? neighbor.id : '';
       if (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID && !getUnassignedRules().length) {
         state.selectedGroupId = state.routing.config.groups[0] ? state.routing.config.groups[0].id : '';
         const firstGroupRule = getRulesForGroup(state.selectedGroupId)[0];
         state.selectedRuleId = firstGroupRule ? firstGroupRule.id : '';
       }
-      render();
+      render({ revealRuleId: state.selectedRuleId });
       showToast('规则已删除', 'success', removed ? (removed.remark || removed.value || removed.type) : '');
     } else if (action === 'move-selected-rule-up' || action === 'move-selected-rule-down') {
       moveRoutingRuleInScope(button.getAttribute('data-id'), action === 'move-selected-rule-up' ? -1 : 1);
     } else if (action === 'move-rule-up' || action === 'move-rule-down') {
-      moveItem(state.routing.config.rules, Number(button.getAttribute('data-index')), action === 'move-rule-up' ? -1 : 1);
-      render();
+      const rule = state.routing.config.rules[Number(button.getAttribute('data-index'))];
+      if (rule) moveRoutingRuleInScope(rule.id, action === 'move-rule-up' ? -1 : 1);
     } else if (action === 'select-provider') {
       state.selectedProviderId = button.getAttribute('data-id');
       render();

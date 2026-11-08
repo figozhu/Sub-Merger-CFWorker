@@ -1,5 +1,39 @@
 # SubMerger Console 设计验收记录
 
+## 2026-11-08：分流规则操作定位验收
+
+本轮在本地 Wrangler 与独立本地 KV 中使用仓库默认迁移配置验收，未连接线上 KV。桌面视口 1440 × 1000、中宽视口 1280 × 720、窄屏视口 390 × 844。
+
+| 步骤 | 操作与结果 | 证据 |
+| --- | --- | --- |
+| 1 | 修改前复制列表中部记录，规则面板 scrollTop 从 758 变为 0，焦点变为 BODY，确认复现 | `01-before-copy.png`、`02-before-jump.png` |
+| 2 | 新增、上下插入直接显示新记录并选中默认匹配内容，最终 MATCH 保持末尾，通过 | `05-insert-fixed.png`、`06-add-fixed.png` |
+| 3 | 中部复制保留当前位置，聚焦副本匹配内容；RULE-SET 副本聚焦提供者，通过 | `09-desktop-accepted.png`；提供者焦点另有 DOM 回归测试 |
+| 4 | 鼠标下移后继续按 Enter 下移，规则与按钮焦点连续保持，通过 | `04-move-fixed.png` |
+| 5 | 窄屏复制、连续移动保留外层滚动；操作栏吸顶且没有页面横向溢出，通过 | `08-mobile-move-fixed.png` |
+| 6 | 搜索隐藏选中项时隐藏工具栏；复制保留搜索，插入被过滤的新记录时清除搜索并提示；类型变更导致结果消失时焦点回搜索框，通过 | 浏览器 DOM 观察与交互回归测试 |
+| 7 | 未归组列表中部复制、改目标后，左栏 scrollTop 保持 344，规则面板保持 4741，并选择相邻规则，通过 | 浏览器 DOM 观察与交互回归测试 |
+
+截图路径均相对于 `designs/submerger-console/routing-interactions/`，如下按流程排列。
+
+修改前，列表中部复制前后：
+
+![复制前](designs/submerger-console/routing-interactions/01-before-copy.png)
+![复制后意外回到顶部](designs/submerger-console/routing-interactions/02-before-jump.png)
+
+修改后，插入、新增和复制：
+
+![插入后可立即编辑](designs/submerger-console/routing-interactions/05-insert-fixed.png)
+![新增后直接定位到末尾新记录](designs/submerger-console/routing-interactions/06-add-fixed.png)
+![复制后保留位置并聚焦副本](designs/submerger-console/routing-interactions/09-desktop-accepted.png)
+
+桌面与窄屏连续移动：
+
+![桌面连续移动](designs/submerger-console/routing-interactions/04-move-fixed.png)
+![窄屏吸顶操作栏与连续移动](designs/submerger-console/routing-interactions/08-mobile-move-fixed.png)
+
+自动化结果：`pnpm run typecheck`、`pnpm test`（14 个文件、146 项测试，包含 17 项新增 DOM 交互回归与 7 项兼容测试）、`pnpm run build` 全部通过。构建为 dry-run；浏览器验收未发现运行时错误。JSDOM 只验证事件、顺序、滚动数值与焦点语义，实际可见性和吸顶遮挡由浏览器验收；本轮未声称完成完整 WCAG 审计或生产部署。
+
 ## 验收范围
 
 - 需求基线：`designs/submerger-console/development-requirements.md`
