@@ -12,6 +12,17 @@
 - **先预览，再发布**：支持导入 Clash YAML、保存草稿、检查配置和预览完整输出。发布后，客户端更新订阅即可使用。
 - **集中查看诊断**：查看订阅拉取错误与客户端访问记录，也可以单独诊断某个机场。
 
+## 消费降级，性价比机场推荐
+
+原来使用一年200多的机场（每个月才50G流量），现在发现一年12元，13元的机场也挺好用，还有一些稍微贵一些（4块，5块一个月，但大多都有300G、500G的流量）
+
+| 机场名       | 价格                                                  | 注册网址                    | 特色               |
+| ------------ | ----------------------------------------------------- | --------------------------- | ------------------ |
+| 【强烈推荐】SOS加速器     | ￥50/一次性（150G/100Mbps），￥19.7/70G/50Mbps/月，￥39.7/300G/300Mbps/月 | [SOS加速器网址](https://www.sosjsq.com/index.php#/register?code=mmjIjIBx) | 有一次性流量包，价格稍微有点高，但速度是真快，39.7那档说是300Mbps，我实测能到500Mbps |
+| 69云     | ￥16.8/一次性（50G），￥6.9/100G/月 | [69云网址](https://69yun69.com/auth/register?code=fobiQj) | 有一次性流量包，每天签到可以增加流量 |
+| 网际快车     | ￥6.8/一次性（20G），￥24/60G/天【1800G/月】 | [网际快车网址](https://wjkc66.vip?c=BFQCSK) | 有一次性流量包，每天签到可以增加流量 |
+| 宝可梦星云 | ￥19.9/180G/月，￥39.9/211G/一次性 | [宝可梦网址](https://love.52pokemon.cc/register?code=TWFWZ7Vd) | 有一次性流量包，每个月有免费的包月体验套餐，有IPLC线路 |
+
 ## 开始使用
 
 部署完成后，打开 Worker 地址并使用管理密码登录。
@@ -152,4 +163,3 @@ pnpm run build
 - [Mihomo 节点配置文档](https://wiki.metacubex.one/en/config/proxies/)
 - [Tailscale 节点配置文档](https://wiki.metacubex.one/en/config/proxies/tailscale/)
 - [blackmatrix7 Clash 规则目录](https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Clash/README.md)
-- [机场参考](docs/subscription-providers.md)
