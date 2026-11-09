@@ -683,8 +683,8 @@ export const consoleClientScript = String.raw`
   function renderRoutingPage() {
     if (!state.routing) return '<div class="loading-screen">正在加载路由配置…</div>';
     const dirty = JSON.stringify(state.routing.config) !== state.routingBaseline;
-    const status = dirty ? '有未保存更改' : state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : (state.routing.migrated ? '迁移草稿待检查' : '草稿已保存');
-    const actions = '<button class="button ghost" data-action="import-routing">导入 YAML</button><button class="button secondary" data-action="preview-routing">完整输出</button><button class="button secondary" data-action="validate-routing" data-busy-key="routingValidate">校验</button><button class="button secondary" data-action="save-routing" data-busy-key="routingSave"' + (!dirty && !state.routing.migrated ? ' disabled' : '') + '>保存草稿</button><button class="button primary" data-action="publish-routing" data-busy-key="routingPublish">发布</button>';
+    const status = dirty ? '有未保存更改' : state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : (state.routing.initialized ? '默认配置待保存' : state.routing.migrated ? '迁移草稿待检查' : '草稿已保存');
+    const actions = '<button class="button ghost" data-action="import-routing">导入 YAML</button><button class="button secondary" data-action="preview-routing">完整输出</button><button class="button secondary" data-action="validate-routing" data-busy-key="routingValidate">校验</button><button class="button secondary" data-action="save-routing" data-busy-key="routingSave"' + (!dirty && !state.routing.migrated && !state.routing.initialized ? ' disabled' : '') + '>保存草稿</button><button class="button primary" data-action="publish-routing" data-busy-key="routingPublish">发布</button>';
     const counts = { groups: state.routing.config.groups.length, rules: state.routing.config.rules.length, providers: state.routing.config.providers.length };
     const tabs = [
       ['groups', '策略组与分流', counts.groups], ['providers', '规则提供者', counts.providers], ['base', 'YAML 模板', null]
@@ -1200,7 +1200,7 @@ export const consoleClientScript = String.raw`
     setBusy('routingSave', true);
     try {
       const data = await api('/api/routing-config/draft', { method: 'PUT', body: JSON.stringify({ config: state.routing.config, baseRevision: state.routing.revision }) });
-      state.routing = Object.assign({}, state.routing, data, { config: clone(state.routing.config), migrated: false });
+      state.routing = Object.assign({}, state.routing, data, { config: clone(state.routing.config), migrated: false, initialized: false });
       state.routingBaseline = JSON.stringify(state.routing.config);
       render();
       showToast('路由草稿已保存', 'success', '正式订阅输出未改变');
@@ -1218,6 +1218,8 @@ export const consoleClientScript = String.raw`
       const data = await api('/api/routing-config/publish', { method: 'POST', body: JSON.stringify({ config: state.routing.config, baseRevision: state.routing.revision }) });
       state.routing.revision = data.revision;
       state.routing.updatedAt = data.updatedAt;
+      state.routing.migrated = false;
+      state.routing.initialized = false;
       state.routingBaseline = JSON.stringify(state.routing.config);
       state.routingIssues = data.validation || { errors: [], warnings: [] };
       state.routingValidatedSnapshot = JSON.stringify(state.routing.config);
@@ -1364,12 +1366,12 @@ export const consoleClientScript = String.raw`
       status.className = 'workspace-status saved';
       const cleanText = state.activeNav === 'subscriptions' ? state.subscriptions.length + ' 个订阅源'
         : state.activeNav === 'nodes' ? state.selfNodeAnalysis.nodes.length + ' 个节点'
-        : state.activeNav === 'routing' ? (state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : '草稿已保存') : '';
+        : state.activeNav === 'routing' ? (state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : state.routing.initialized ? '默认配置待保存' : state.routing.migrated ? '迁移草稿待检查' : '草稿已保存') : '';
       status.innerHTML = '<span class="workspace-status-dot"></span>' + escapeHtml(cleanText);
     }
     const saveSelector = state.activeNav === 'subscriptions' ? '[data-action="save-subscriptions"]' : state.activeNav === 'routing' ? '[data-action="save-routing"]' : '';
     const save = saveSelector ? document.querySelector(saveSelector) : null;
-    if (save) save.disabled = !dirty && !(state.activeNav === 'routing' && state.routing && state.routing.migrated);
+    if (save) save.disabled = !dirty && !(state.activeNav === 'routing' && state.routing && (state.routing.migrated || state.routing.initialized));
     if (state.activeNav === 'subscriptions') {
       if (save) save.disabled = state.busy.has('subscriptions') || JSON.stringify(state.subscriptions) === state.subscriptionsBaseline;
       const saveUserAgent = document.querySelector('[data-action="save-subscription-settings"]');

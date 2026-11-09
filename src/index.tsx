@@ -16,7 +16,8 @@ import generateLegacyProxyConfigYaml from './utils/generateProxyConfigYaml'
 import { generateRoutingYaml, generateRoutingYamlVariants } from './utils/generateRoutingYaml'
 import { sanitizeProxyGroupYaml } from './utils/pruneEmptyProxyGroups'
 import { validateRoutingConfig } from './utils/validateRoutingConfig'
-import { getDefaultYaml, getDefaultYamlString } from './data/defaultYmal'
+import { getStoredDefaultYaml, getDefaultYamlString } from './data/defaultYmal'
+import { createDefaultRoutingConfig, detectRoutingTemplateMode, usesDefaultRouting } from './config/defaultRouting'
 import { getDefaultSelfNodeData, getSelfNodeData } from './data/selfNodeData'
 import {
   clearSubscriptionCaches,
@@ -246,7 +247,7 @@ async function loadSubscriptionNodesForPreview(subType: SubscriptionType, env: B
 
 /**
  * 获取订阅完整 YAML，保留旧缓存键和即时刷新语义；无源时仍生成自建节点与有效规则。
- * 未发布新版路由配置时走旧生成器，并在完整模板合并后修复空组与失效引用。
+ * 新安装直接使用通用默认；已保存旧模板的部署继续走旧生成器，保留个人配置。
  * @param subType 订阅类型。
  * @param env Worker 环境。
  * @param noCache 是否强制重新拉取订阅源。
@@ -294,11 +295,15 @@ export async function getSubYamlWithCache(
   }
   const patterns = subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN
   const published = await getPublishedRoutingConfig(env)
+  const storedYaml = published?.config?.schemaVersion === 1 ? null : await getStoredDefaultYaml(env)
+  const routingConfig = published?.config?.schemaVersion === 1
+    ? published.config
+    : usesDefaultRouting(storedYaml) ? createDefaultRoutingConfig(storedYaml?.yaml) : null
   let generated: { normalYaml: string; stashYaml: string }
-  if (published?.config?.schemaVersion === 1) {
+  if (routingConfig) {
     const selfNodes = await getSelfNodeData(env)
     generated = generateRoutingYamlVariants(
-      published.config,
+      routingConfig,
       subscriptionNodes,
       selfNodes,
       subType === SubscriptionType.Monthly ? 'monthly' : 'trafficPackage',
@@ -306,10 +311,9 @@ export async function getSubYamlWithCache(
     )
   } else {
     const legacy = await generateLegacyProxyConfigYaml(subscriptionNodes, patterns, env)
-    const defaultYaml = await getDefaultYaml(env)
     generated = {
-      normalYaml: sanitizeProxyGroupYaml(legacy.normalYaml + defaultYaml, legacy.groupNames),
-      stashYaml: sanitizeProxyGroupYaml(legacy.stashYaml + defaultYaml, legacy.groupNames),
+      normalYaml: sanitizeProxyGroupYaml(legacy.normalYaml + storedYaml!.yaml, legacy.groupNames),
+      stashYaml: sanitizeProxyGroupYaml(legacy.stashYaml + storedYaml!.yaml, legacy.groupNames),
     }
   }
 
@@ -402,25 +406,38 @@ app.put('/api/self-nodes', async (c) => {
 })
 
 /**
- * 返回草稿、当前发布修订和旧配置迁移状态。
- * 没有草稿时只在内存中生成迁移配置，绝不自动写入或发布。
+ * 优先返回草稿、已发布配置，其次迁移旧模板；新安装使用通用默认。
+ * 初始化和迁移只发生在内存中，绝不自动写入或发布。
  */
 app.get('/api/routing-config', async (c) => {
-  const [draft, published, defaultYaml] = await Promise.all([
+  const [draft, published] = await Promise.all([
     getRoutingDraft(c.env),
     getPublishedRoutingConfig(c.env),
-    getDefaultYaml(c.env),
   ])
-  const migration = createLegacyRoutingConfig(defaultYaml, c.env)
-  if (!draft && !migration.config) return failure(c, 500, '旧配置无法迁移', migration.errors)
-  const config = draft?.config ?? migration.config as RoutingConfig
+  const defaults = createDefaultRoutingConfig()
+  let config = draft?.config ?? published?.config
+  let migrated = false
+  let initialized = false
+  if (!config) {
+    const storedYaml = await getStoredDefaultYaml(c.env)
+    if (usesDefaultRouting(storedYaml)) {
+      config = storedYaml ? createDefaultRoutingConfig(storedYaml.yaml) : defaults
+      initialized = true
+    } else {
+      const migration = createLegacyRoutingConfig(storedYaml!.yaml, c.env)
+      if (!migration.config) return failure(c, 500, '旧配置无法迁移', migration.errors)
+      config = migration.config
+      migrated = true
+    }
+  }
   return success(c, {
     config,
     revision: published?.revision ?? 0,
-    updatedAt: draft?.updatedAt ?? '',
+    updatedAt: draft?.updatedAt ?? published?.updatedAt ?? '',
     publishedUpdatedAt: published?.updatedAt ?? '',
-    migrated: !draft,
-    defaultBaseYaml: migration.config?.baseYaml ?? '',
+    migrated,
+    initialized,
+    defaultBaseYaml: defaults.baseYaml,
   })
 })
 
@@ -547,7 +564,11 @@ app.post('/api/config', async (c) => {
   if (typeof body?.selfNodeData !== 'string' || typeof body?.defaultYaml !== 'string') return failure(c, 400, 'selfNodeData and defaultYaml are required')
   const nodeAnalysis = analyzeSelfNodes(body.selfNodeData)
   if (!nodeAnalysis.valid) return failure(c, 422, '自建节点配置无效', nodeAnalysis.errors)
-  await c.env.SUB_MERGER_KV.put(`${c.env.TABLENAME}:config`, JSON.stringify({ selfNodeData: body.selfNodeData, defaultYaml: body.defaultYaml, updatedAt: new Date().toISOString() }))
+  const previous = await getStoredDefaultYaml(c.env)
+  // 保存来源模式，确保以后调整 DNS、注释或规则目标不会意外切回历史的十五组。
+  const routingMode = (detectRoutingTemplateMode(body.defaultYaml) ?? previous?.routingMode
+    ?? (usesDefaultRouting(previous ?? { yaml: body.defaultYaml }) ? 'default' : 'legacy'))
+  await c.env.SUB_MERGER_KV.put(`${c.env.TABLENAME}:config`, JSON.stringify({ selfNodeData: body.selfNodeData, defaultYaml: body.defaultYaml, routingMode, updatedAt: new Date().toISOString() }))
   await clearSubscriptionCaches(c.env)
   return success(c)
 })

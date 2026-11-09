@@ -6,7 +6,30 @@
  - 你的Worker绑一个没被墙的域名，就可以无需代理更新订阅配置了
 
 
-新版控制台支持在网页中维护订阅源、自建节点、策略组、规则提供者、路由规则和基础 YAML 模板。首次部署不会自动改变现有订阅输出；管理员需要在“路由配置”中检查迁移草稿并主动发布，新动态生成器才会生效。
+新版控制台支持在网页中维护订阅源、自建节点、策略组、规则提供者、路由规则和基础 YAML 模板。新安装直接使用下述通用默认配置；已有草稿、已发布配置和旧 KV 中保存的自定义 YAML 会继续保留。
+
+## 初始分组与分流
+
+初始配置只有 **直连** 和 **代理** 两个策略组。直连组仅包含 `DIRECT`；代理组自动收集当前订阅类型的订阅节点与自建节点，可在客户端手动选择出口，全局节点排除规则仍然有效。
+
+默认采用“私有网络及中国大陆地址直连，其余走代理”的预设，按下表顺序匹配：
+
+| 规则 | 目标 | 用途 |
+| --- | --- | --- |
+| `RULE-SET,private` | 直连 | 私有网络专用域名 |
+| `RULE-SET,lancidr` | 直连 | 局域网及保留 IP，使用 `no-resolve` |
+| `RULE-SET,direct` | 直连 | 国内可直连域名 |
+| `RULE-SET,cncidr` | 直连 | 中国大陆 IP，使用 `no-resolve` |
+| `MATCH` | 代理 | 所有未命中的流量 |
+
+四个规则集来自 [Loyalsoldier/clash-rules](https://github.com/Loyalsoldier/clash-rules)，客户端每天更新一次。其余流量已经由 `MATCH` 覆盖，无需重复下载 `proxy`、`gfw` 等代理名单。不同地区或有特殊出口需要的用户，可在控制台自行调整规则与组成员。
+
+默认配置不含作者的个人/公司域名、固定 hosts、VPS 网段、Tailscale 私网、EMBY 服务地址，也不预置币圈、扑克、AI、媒体或游戏平台的独立分组。AI、媒体等公开规则集本身通用，但特殊出口偏好不适合所有用户，因此不作为初始配置。自建节点初始为空。
+
+- 未配置任何可用节点时，编辑器仍显示两组；导出的 YAML 会裁剪空“代理”组，并将代理兜底设为 `REJECT`，避免意外直连。添加节点后，代理组会自动恢复。
+- 新安装打开路由配置显示“默认配置待保存”。保存草稿不会影响正式输出，发布才会应用自定义修改。
+- 已有草稿优先显示；没有草稿时显示已发布配置；两者都没有时，才迁移旧 KV 模板或初始化通用默认。读取页面不会自动改写 KV。
+- 升级不自动清理或替换已有个人配置、历史缓存。使用旧代码默认但从未保存 YAML 的部署，在下一次成功生成时会采用通用默认；如需保留原有个人策略，应在升级前保存旧模板或发布自定义配置。
 
 关于Clash中流量和有效期的显示：
  - 流量是所有订阅源返回的数据累加起来的
@@ -114,14 +137,14 @@ pnpm run build
 
 ### 迁移步骤
 
-1. 部署新代码，但暂不发布路由配置；公开订阅端点仍走旧硬编码生成器。
-2. 登录控制台并进入“路由配置”，系统会从旧 `defaultYaml`、硬编码策略组和两套环境正则生成内存迁移草稿。
+1. 已有自定义旧 `defaultYaml` 的部署暂不发布路由配置时，公开订阅端点仍走旧硬编码生成器。
+2. 登录控制台并进入“路由配置”，系统会从已保存的旧 `defaultYaml`、硬编码策略组和两套环境正则生成内存迁移草稿。新安装则直接提供通用两组默认。
 3. 检查通用/Stash、包年包月/流量包四种完整输出，完成服务端校验。
 4. 保存草稿并主动发布。发布成功后修订号递增，动态生成器开始生效。
 
 ### 回退方法
 
-删除或停用 `${TABLENAME}:routing:published` 键即可立即回到旧生成路径。该操作不会删除草稿、订阅源、`${TABLENAME}:config` 或新版自建节点数据。建议保留旧路径至少一个完整发布和定时刷新周期。
+删除或停用 `${TABLENAME}:routing:published` 键后，后续生成会回到已保存的旧模板；没有旧模板时使用通用默认。已有输出缓存还需清除或等待刷新。该操作不会删除草稿、订阅源、`${TABLENAME}:config` 或新版自建节点数据。建议保留旧路径至少一个完整发布和定时刷新周期。
 
 ### 已知限制
 
@@ -163,19 +186,7 @@ pnpm run deploy
 | MAGIC | 订阅链接中的魔法字符串 |
 | BARK_OPENID | Bark 通知的 openid |
 | EXCLUDE_PATTERN | 排除节点的正则表达式 |
-| OTHER_MATCH_PATTERN | 需要的其他类型节点的正则表达式 |
-| FALLBACK_MATCH_PATTERN | 需要的Fallback节点的正则表达式 |
-| YOUTUBE_MATCH_PATTERN | 需要的YouTube节点的正则表达式 |
-| EMBY_MATCH_PATTERN | 需要的EMBY节点的正则表达式 |
-| TWITTER_MATCH_PATTERN | 需要的Twitter节点的正则表达式 |
-| TELEGRAM_MATCH_PATTERN | 需要的Telegram节点的正则表达式 |
-| STEAM_MATCH_PATTERN | 需要的Steam节点的正则表达式 |
-| OTHER_EXCLUDE_PATTERN | 排除的其他类型节点的正则表达式 |
-| FALLBACK_EXCLUDE_PATTERN | 排除的Fallback节点的正则表达式 |
-| YOUTUBE_EXCLUDE_PATTERN | 排除的YouTube节点的正则表达式 |
-| EMBY_EXCLUDE_PATTERN | 排除的EMBY节点的正则表达式 |
-| TWITTER_EXCLUDE_PATTERN | 排除的Twitter节点的正则表达式 |
-| TELEGRAM_EXCLUDE_PATTERN | 排除的Telegram节点的正则表达式 |
-| STEAM_EXCLUDE_PATTERN | 排除的Steam节点的正则表达式 |
 | INSTANT_REFRESH_INTERVAL | 获取订阅内容不使用缓存的请求间隔（秒） |
 
+
+新部署模板只保留两类订阅各自的 `EXCLUDE_PATTERN`。历史 `OTHER_*`、`AI_*`、`EMBY_*` 等分组正则仅供旧配置生成和迁移兼容，新安装通过控制台的策略组成员筛选器配置，无需填写。

@@ -3,7 +3,7 @@ import YAML from 'yaml'
 import generateLegacyProxyConfigYaml from '../../src/utils/generateProxyConfigYaml'
 import { generateRoutingYamlVariants } from '../../src/utils/generateRoutingYaml'
 import { createLegacyProxyGroups, createLegacyRoutingConfig } from '../../src/config/routingMigration'
-import { getDefaultYamlString } from '../../src/data/defaultYmal'
+import { legacyDefaultYaml } from '../fixtures/legacyRouting'
 import { getSelfNodeData } from '../../src/data/selfNodeData'
 import { validateRoutingConfig } from '../../src/utils/validateRoutingConfig'
 import { sanitizeProxyGroupYaml } from '../../src/utils/pruneEmptyProxyGroups'
@@ -80,7 +80,7 @@ rules:
   it('默认旧配置可以生成可发布的 schemaVersion=1 草稿', () => {
     const env = createTestEnv()
     configurePatterns(env)
-    const migration = createLegacyRoutingConfig(getDefaultYamlString(), env)
+    const migration = createLegacyRoutingConfig(legacyDefaultYaml, env)
     expect(migration.errors).toEqual([])
     expect(validateRoutingConfig(migration.config).errors).toEqual([])
   })
@@ -94,17 +94,17 @@ rules:
         if (withSelfNodes) {
           kv.values.set('test-sub:config', JSON.stringify({
             selfNodeData: JSON.stringify([{ name: 'SELF-JP', type: 'ss', server: 'self.example', port: 9 }]),
-            defaultYaml: getDefaultYamlString(),
+            defaultYaml: legacyDefaultYaml,
           }))
         }
         const patterns = output === 'monthly' ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN
         const legacy = await generateLegacyProxyConfigYaml(fixtureNodes(), patterns, env)
-        const migration = createLegacyRoutingConfig(getDefaultYamlString(), env)
+        const migration = createLegacyRoutingConfig(legacyDefaultYaml, env)
         expect(migration.errors).toEqual([])
         const selfNodes = await getSelfNodeData(env)
         const dynamic = generateRoutingYamlVariants(migration.config!, fixtureNodes(), selfNodes, output, patterns.EXCLUDE_PATTERN)
-        expect(parsed(dynamic.normalYaml)).toEqual(parsed(sanitizeProxyGroupYaml(legacy.normalYaml + getDefaultYamlString())))
-        expect(parsed(dynamic.stashYaml)).toEqual(parsed(sanitizeProxyGroupYaml(legacy.stashYaml + getDefaultYamlString())))
+        expect(parsed(dynamic.normalYaml)).toEqual(parsed(sanitizeProxyGroupYaml(legacy.normalYaml + legacyDefaultYaml)))
+        expect(parsed(dynamic.stashYaml)).toEqual(parsed(sanitizeProxyGroupYaml(legacy.stashYaml + legacyDefaultYaml)))
       })
     }
   }
