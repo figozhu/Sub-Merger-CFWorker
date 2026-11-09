@@ -1145,6 +1145,24 @@ textarea.code-input {
   flex-direction: column;
 }
 
+/* 配置帮助与编辑器一起显示，长说明在手机上自然换行。 */
+.node-config-help {
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #f4f7fb;
+  color: #526079;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.node-config-help a {
+  color: #285bb5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .simple-panel-head span,
 .count-badge {
   display: inline-grid;

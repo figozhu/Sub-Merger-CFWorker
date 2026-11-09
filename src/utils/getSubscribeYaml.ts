@@ -4,6 +4,7 @@ import type { SubUserInfo } from '../types/types'
 import type { SubscriptionRecord } from '../services/configuration'
 import { sanitizeErrorLog, writeErrorLog, type ErrorLogInput, type LogStoreEnv } from '../services/errorLogs'
 import { getSubscriptionSettings } from '../services/subscriptionSettings'
+import { readSubscriptionSourceCache, saveSubscriptionSourceCache } from '../services/subscriptionSourceCache'
 
 /** 抓取复用已有绑定；全局 UA 从 KV 读取，不需要新增部署变量或密钥。 */
 export interface SubscriptionFetchEnv extends LogStoreEnv {
@@ -223,9 +224,14 @@ function updateTotalUserInfo(totalUserInfo: SubUserInfo, newUserInfo: SubUserInf
  * 日志仅记录订阅名称与状态，不输出完整订阅 URL、节点密钥或 Bark OpenID。
  * @param subArr 已保存的订阅源数组。
  * @param envConfig Worker 运行环境与请求 User-Agent 配置。
- * @returns 流量汇总与扁平化节点数组。
+ * @param options 预览时禁止写入成功快照；仍可读取历史成功数据。
+ * @returns 流量汇总、节点数组，以及本次抓取失败数和无法用历史数据补齐的源数量。
  */
-async function getSubscribeYaml(subArr: SubscriptionRecord[], envConfig: SubscriptionFetchEnv): Promise<[SubUserInfo, SubscriptionNode[], { failedCount: number }]> {
+async function getSubscribeYaml(
+    subArr: SubscriptionRecord[],
+    envConfig: SubscriptionFetchEnv,
+    options: { persistCache?: boolean } = {},
+): Promise<[SubUserInfo, SubscriptionNode[], { failedCount: number; unavailableCount: number }]> {
     const subUserInfo = {
         upload: 0,
         download: 0,
@@ -236,9 +242,23 @@ async function getSubscribeYaml(subArr: SubscriptionRecord[], envConfig: Subscri
     // 每批只读取一次全局设置，确保所有源使用同一份配置并减少 KV 访问。
     const settings = await getSubscriptionSettings(envConfig)
     const userAgent = getSubscriptionUserAgent(settings.userAgent)
-    const results = await Promise.all(subArr.map((subscription) => fetchSubscription(subscription, envConfig, { userAgent })))
-    results.filter((result) => result.ok).forEach((result) => updateTotalUserInfo(subUserInfo, result.userInfo))
-    return [subUserInfo, results.flatMap((result) => result.nodes), { failedCount: results.filter((result) => !result.ok).length }]
+    const results = await Promise.all(subArr.map(async (subscription) => {
+        const result = await fetchSubscription(subscription, envConfig, { userAgent })
+        if (result.ok) {
+            if (options.persistCache !== false) await saveSubscriptionSourceCache(envConfig, subscription, result)
+            return { ...result, available: true }
+        }
+        const cached = await readSubscriptionSourceCache(envConfig, subscription)
+        if (!cached) return { ...result, available: false }
+        await writeErrorLog(envConfig, { level: 'warning', scope: 'subscription', code: 'SOURCE_CACHE_FALLBACK', sourceName: subscription.subName, subscriptionType: subscription.subType, message: '机场更新失败，继续使用上次成功的节点和流量信息', hint: '查看该机场的抓取错误；恢复后会自动替换历史数据。' })
+        // 保留 ok=false 表示本次网络抓取确实失败，但历史成功数据仍可参与合并。
+        return { ...result, ...cached, available: true }
+    }))
+    results.filter((result) => result.available).forEach((result) => updateTotalUserInfo(subUserInfo, result.userInfo))
+    return [subUserInfo, results.flatMap((result) => result.nodes), {
+        failedCount: results.filter((result) => !result.ok).length,
+        unavailableCount: results.filter((result) => !result.available).length,
+    }]
 }
 
 export {getSubscribeYaml, generateSubscriptionUserInfoString};

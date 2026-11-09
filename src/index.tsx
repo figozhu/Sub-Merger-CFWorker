@@ -241,7 +241,7 @@ async function loadSubscriptionNodesForPreview(subType: SubscriptionType, env: B
   if (targets.length === 0) {
     return { userInfo: { upload: 0, download: 0, total: 0, expire: 9999999999 }, nodes: [] }
   }
-  const [userInfo, nodes] = await getSubscribeYaml(targets, env)
+  const [userInfo, nodes] = await getSubscribeYaml(targets, env, { persistCache: false })
   return { userInfo, nodes }
 }
 
@@ -251,7 +251,7 @@ async function loadSubscriptionNodesForPreview(subType: SubscriptionType, env: B
  * @param subType 订阅类型。
  * @param env Worker 环境。
  * @param noCache 是否强制重新拉取订阅源。
- * @param failOnUnavailableSources 定时任务使用 true，让全部抓取失败仍记录任务失败。
+ * @param failOnUnavailableSources 定时任务使用 true，让全部源失败且无历史数据时记录任务失败。
  * @returns 两类客户端 YAML 与流量信息。
  */
 export async function getSubYamlWithCache(
@@ -286,11 +286,11 @@ export async function getSubYamlWithCache(
   const targets = subscriptions.filter((subscription) => subscription.subType === subType)
 
   const [subUserInfo, subscriptionNodes, fetchSummary] = await getSubscribeYaml(targets, env)
-  if (fetchSummary.failedCount > 0 && cached) {
+  if (fetchSummary.unavailableCount > 0 && cached) {
     await writeErrorLog(env, { level: 'warning', scope: 'subscription', code: 'CACHE_FALLBACK', subscriptionType: subType, message: '上游抓取不完整，继续使用上次成功缓存', hint: '查看同一时段的订阅源错误，并在日志页诊断；恢复后定时刷新会更新缓存。' })
     return cached
   }
-  if (targets.length > 0 && fetchSummary.failedCount === targets.length && failOnUnavailableSources) {
+  if (targets.length > 0 && fetchSummary.unavailableCount === targets.length && failOnUnavailableSources) {
     throw new Error('所有订阅源读取失败')
   }
   const patterns = subType === SubscriptionType.Monthly ? env.SUBSCRIBE_PATTERN : env.ONETIME_PATTERN
@@ -321,8 +321,8 @@ export async function getSubYamlWithCache(
   finalObj.normalYaml = `# 最后更新时间（通用）：${updatedAt}\n\n${generated.normalYaml}`
   finalObj.stashYaml = `# 最后更新时间（Stash）：${updatedAt}\n\n${generated.stashYaml}`
   finalObj.subUserInfo = subUserInfo
-  // 没有旧缓存时允许返回仍可用的部分源，但不把缺失节点的结果保存成成功缓存。
-  if (fetchSummary.failedCount === 0) await env.SUB_MERGER_KV.put(cacheKey, JSON.stringify(finalObj))
+  // 各机场都有本次或历史成功数据时才更新完整输出，避免缺失节点的结果覆盖成功缓存。
+  if (fetchSummary.unavailableCount === 0) await env.SUB_MERGER_KV.put(cacheKey, JSON.stringify(finalObj))
   return finalObj
 }
 

@@ -378,8 +378,8 @@ export const consoleClientScript = String.raw`
     return pageHeader('自建节点', status, analysis.valid ? (dirty ? 'dirty' : 'saved') : 'error', actions)
       + '<div class="workspace-content nodes-workspace"><section class="data-panel parsed-nodes-panel"><div class="simple-panel-head"><h2>节点</h2><span>' + analysis.nodes.length + '</span></div><div class="parsed-node-list">'
       + (nodes || '<div class="empty-list">' + (analysis.valid ? '暂无可显示节点' : 'JSON 无效，修复后恢复节点预览') + '</div>') + '</div></section>'
-      + '<section class="data-panel json-editor-panel"><div class="code-toolbar"><span>self-nodes.json</span><span>UTF-8 · 2 空格</span></div><div class="code-editor-grid node-code-grid"><div class="yaml-line-rail" id="node-line-rail" aria-hidden="true">'
-      + lines + '</div><textarea id="self-nodes-editor" class="base-yaml-textarea node-json-textarea" spellcheck="false" aria-label="自建节点 JSON">' + escapeHtml(state.selfNodesRaw) + '</textarea></div>'
+      + '<section class="data-panel json-editor-panel"><div class="node-config-help" id="node-config-help">添加不同类型的节点，可查看 <a href="https://wiki.metacubex.one/en/config/proxies/" target="_blank" rel="noopener noreferrer">Mihomo 节点配置帮助 ↗</a>。Wiki 示例为 YAML，本页需填写 JSON 数组；请将示例中 proxies 下的节点列表转换为 JSON 后粘贴，无需保留外层 proxies 字段。</div><div class="code-toolbar"><span>self-nodes.json</span><span>UTF-8 · 2 空格</span></div><div class="code-editor-grid node-code-grid"><div class="yaml-line-rail" id="node-line-rail" aria-hidden="true">'
+      + lines + '</div><textarea id="self-nodes-editor" class="base-yaml-textarea node-json-textarea" spellcheck="false" aria-label="自建节点 JSON" aria-describedby="node-config-help">' + escapeHtml(state.selfNodesRaw) + '</textarea></div>'
       + '<div class="editor-validation ' + (analysis.valid ? 'valid' : 'invalid') + '"><span>' + escapeHtml(analysis.valid ? analysis.nodes.length + ' 个节点，格式有效' : analysis.errors[0].message) + '</span></div></section></div>';
   }
 

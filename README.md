@@ -79,6 +79,8 @@ pnpm run build
 
 ## 新版控制台与 KV
 
+自建节点页面提供 [Mihomo 节点配置帮助](https://wiki.metacubex.one/en/config/proxies/)，可按协议查看不同类型节点的字段。Wiki 示例为 YAML，本页使用 JSON 数组：将示例 `proxies` 下的节点列表转换为 JSON 后粘贴，不保留外层 `proxies` 字段。
+
 新版控制台继续保留 `${TABLENAME}` 作为订阅源数组，并新增以下独立键：
 
 | KV 键 | 用途 |
@@ -88,10 +90,13 @@ pnpm run build
 | `${TABLENAME}:routing:published` | 当前已发布路由配置与修订号 |
 | `${TABLENAME}:config` | 升级期兼容旧自建节点和默认 YAML |
 | `${TABLENAME}:subscription-settings` | 所有订阅源共用的全局 User-Agent 配置 |
+| `${TABLENAME}:source-cache:v1:<SHA-256>` | 每个机场最后一次成功的节点与流量信息，按套餐类型和订阅地址摘要区分 |
 | `${TABLENAME}:logs:<倒序时间>:<UUID>` | 独立诊断日志，自动保留 7 天 |
 | `${TABLENAME}:access-logs:<倒序时间>:<UUID>` | 客户端拉取订阅的访问日志，自动保留 7 天 |
 
 保存订阅源、保存自建节点或发布路由配置后，会清除包年包月和流量包的两个现有缓存键。保存草稿、校验和完整输出预览不会清理正式缓存。
+
+机场成功快照独立保留，不随上述输出缓存清除，也不自动过期。更新失败时沿用该机场最近成功的节点和流量，其他机场继续更新；恢复后自动替换。修改机场名称仍可复用快照，修改地址或删除机场后不会将原机场节点混入当前输出。预览只读快照，诊断始终展示本次真实抓取结果，两者均不更新成功快照。
 
 ### 错误日志与订阅源诊断
 
@@ -107,7 +112,7 @@ pnpm run build
 - 抓取总超时为 20 秒，包含响应体读取；单源正文最多 5 MiB。正常 YAML 即使被上游误标为 `text/html` 仍可解析。
 - 日志区分 HTTP 拒绝、WAF 人机验证、网络异常、超时、非 Clash 格式、YAML 错误、空节点和客户端升级提示。仅保存脱敏元数据，不保存订阅正文、完整 URL、token 或节点密码。
 - 自动抓取仅记录失败；主动诊断会记录成功与失败；运行异常和定时刷新失败也会记录。日志写入失败不会阻断订阅处理，可在 Workers 控制台查看固定故障提示。
-- 抓取不完整且已有成功缓存时继续返回旧缓存；没有缓存时使用本次成功源和自建节点生成完整 YAML，但不缓存抓取失败的降级结果。全部失败也可返回容错 YAML，源错误仍写诊断日志；定时刷新仍报告全部抓取失败。已知旧升级提示或仅注释缓存会重新生成。
+- 抓取失败时优先使用该机场的成功快照，并记录 `SOURCE_CACHE_FALLBACK`。仍有机场缺少数据时，兼容回退到整份旧 YAML；没有旧 YAML 时使用可用节点生成容错输出，但不覆盖完整缓存。全部机场失败且无可用历史数据时，定时刷新报告失败。已知旧升级提示或仅注释缓存会重新生成。
 - `GET /api/logs?cursor=...` 与 `POST /api/subscriptions/diagnose` 均需要登录。诊断请求体示例：`{"index":0,"userAgent":"Clash.Meta"}`，`index` 为当前已保存数组中的位置。
 
 排查本地可读但 CF 不可读时，先比较实际 UA 和节点数量。HTTP 200 也可能只包含服务商的提示节点；403 或 `CLOUDFLARE_CHALLENGE` 则提示检查上游 WAF、出口 IP 和地区限制，429 提示频率限制，`NETWORK_ERROR` 需要继续核查 DNS/TLS 和网络。只有部署后从 Worker 执行诊断，才能确认真实 CF 出口的结果。Cloudflare 对验证页的识别依据见[官方说明](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)。

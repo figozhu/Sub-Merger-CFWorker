@@ -128,7 +128,7 @@ describe('订阅抓取诊断与日志', () => {
 
   it('聚合只累加成功源，保留失败数量供缓存层决策', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(yaml, { headers: { 'subscription-userinfo': 'total=1000' } })).mockResolvedValueOnce(new Response('denied', { status: 403 }))
-    const [info, nodes, summary] = await getSubscribeYaml([source, { ...source, subName: '失败源' }], createTestEnv())
+    const [info, nodes, summary] = await getSubscribeYaml([source, { ...source, subName: '失败源', subUrl: 'https://failed.example/sub' }], createTestEnv())
     expect(info.total).toBe(1000)
     expect(nodes).toHaveLength(1)
     expect(summary.failedCount).toBe(1)

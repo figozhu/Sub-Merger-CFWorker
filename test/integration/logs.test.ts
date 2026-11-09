@@ -92,7 +92,7 @@ describe('错误日志与诊断接口', () => {
   it('部分源失败时返回可用节点，但不写入不完整缓存', async () => {
     const { kv, env } = setup()
     const subscriptions = JSON.parse(kv.values.get(env.TABLENAME) || '[]')
-    kv.values.set(env.TABLENAME, JSON.stringify([...subscriptions, { ...subscriptions[0], subName: '失败源' }]))
+    kv.values.set(env.TABLENAME, JSON.stringify([...subscriptions, { ...subscriptions[0], subName: '失败源', subUrl: 'https://failed.example/sub' }]))
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('proxies:\n - name: 正常节点\n   type: ss\n')).mockResolvedValueOnce(new Response('denied', { status: 403 }))
     const result = await getSubYamlWithCache(SubscriptionType.Monthly, env, true)
     expect(result.normalYaml).toContain('正常节点')
