@@ -1,5 +1,21 @@
 {
   "name": "sub-merger",
+  "cloudflare": {
+    "bindings": {
+      "SUB_MERGER_KV": {
+        "description": "保存订阅源、自建节点、路由配置和缓存；部署时自动创建，请保留绑定名。"
+      },
+      "PASSWORD": {
+        "description": "控制台管理密码。请设置不易猜测的独立密码，并妥善保存。"
+      },
+      "SALT": {
+        "description": "登录凭据的随机盐值。请使用与管理密码不同的长随机字符串。"
+      },
+      "MAGIC": {
+        "description": "订阅链接访问标识。请使用足够长的随机字母和数字，避免被他人猜到订阅地址。"
+      }
+    }
+  },
   "scripts": {
     "dev": "wrangler dev src/index.tsx --test-scheduled",
     "deploy": "wrangler deploy --minify src/index.tsx",

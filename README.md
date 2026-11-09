@@ -104,20 +104,37 @@ Tailscale 连接由客户端建立。请使用支持该节点类型的 Mihomo �
 
 ## 部署
 
-需要 Cloudflare 账号、Workers KV、Node.js 和 pnpm。
+### 一键部署到 Cloudflare
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2Ffigozhu%2FSub-Merger-CFWorker)
+
+无需在本地安装 Node.js 或 pnpm。点击按钮后，按照 Cloudflare 的部署向导完成以下步骤：
+
+1. 登录 Cloudflare 并连接 GitHub，将项目复制到自己的 GitHub 账号，确认仓库名和 Worker 名称。
+2. 填写三个必需的 Secrets：`PASSWORD`（管理密码）、`SALT`（随机盐值）和 `MAGIC`（订阅链接标识）。请分别设置不易猜测的值；`MAGIC` 建议仅使用字母和数字，便于放入 URL。
+3. 确认部署。Cloudflare 会根据仓库中的 `wrangler.jsonc` 自动创建并绑定 `SUB_MERGER_KV`，安装依赖、构建并部署 Worker。
+4. 打开部署后的 Worker 地址，使用刚设置的 `PASSWORD` 登录，按「开始使用」完成配置。需要直连更新时，可为 Worker 绑定自己的域名。
+
+密码等敏感值在向导中填写，不要写入公开仓库；`.dev.vars.example` 仅声明需要填写的 Secrets。后续可在 Worker 的 **Settings → Variables and Secrets** 中修改。按钮使用 Cloudflare 官方的 [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/) 流程，仍需首次登录、授权和填写配置。
+
+### 手动部署
+
+需要 Cloudflare 账号、Node.js 和 pnpm。
 
 1. 下载本仓库并运行 `pnpm install`。
 2. 在 Cloudflare 创建 KV 命名空间，将 `wrangler.toml.template` 复制为 `wrangler.toml`。
 3. 填写 KV 命名空间 ID，保留绑定名 `SUB_MERGER_KV`，并修改管理密码、盐值和订阅链接标识。
-4. 运行 `pnpm exec wrangler login` 登录 Cloudflare，再运行 `pnpm run deploy` 部署。
+4. 运行 `pnpm exec wrangler login` 登录 Cloudflare，再运行 `pnpm run deploy --config wrangler.toml` 部署。
 5. 打开部署后的 Worker 地址，按「开始使用」完成配置。也可以为 Worker 绑定自己的域名。
+
+已有 `wrangler.toml` 的用户也请显式添加 `--config wrangler.toml`。Wrangler 默认优先读取一键部署使用的 `wrangler.jsonc`，不会合并两份配置；本地 `wrangler.toml` 仍被 Git 忽略。
 
 ### 配置项
 
 | 配置项 | 用途 |
 | --- | --- |
 | `PASSWORD` | 控制台管理密码 |
-| `SALT` | 登录凭据的盐值，请替换模板默认值 |
+| `SALT` | 登录凭据的随机盐值；手动部署时请替换模板默认值 |
 | `MAGIC` | 订阅链接的访问标识，请使用不易猜测的字符串 |
 | `TABLENAME` | 配置存储前缀 |
 | `KEY_VERSION` | 订阅输出缓存版本，通常保持默认值 |
@@ -126,7 +143,7 @@ Tailscale 连接由客户端建立。请使用支持该节点类型的 Mihomo �
 | `SUBSCRIBE_PATTERN.EXCLUDE_PATTERN` | 包年/包月订阅的节点排除规则 |
 | `ONETIME_PATTERN.EXCLUDE_PATTERN` | 流量包订阅的节点排除规则 |
 
-默认每小时执行一次定时刷新，可在 `wrangler.toml` 的 `triggers.crons` 中调整。两次拉取同类订阅的间隔小于即时刷新窗口时，会重新请求机场；其他请求优先使用已生成的订阅。
+默认每小时执行一次定时刷新，可在所用配置文件（`wrangler.jsonc` 或 `wrangler.toml`）的 `triggers.crons` 中调整。两次拉取同类订阅的间隔小于即时刷新窗口时，会重新请求机场；其他请求优先使用已生成的订阅。
 
 ## 常见问题
 
@@ -152,6 +169,8 @@ Tailscale 连接由客户端建立。请使用支持该节点类型的 Mihomo �
 
 ## 本地开发
 
+将 `.dev.vars.example` 复制为 `.dev.vars`，填写本地使用的 `PASSWORD`、`SALT` 和 `MAGIC`，再运行：
+
 ```bash
 pnpm install
 pnpm run dev
@@ -159,6 +178,8 @@ pnpm run typecheck
 pnpm run test
 pnpm run build
 ```
+
+开发服务默认使用 `wrangler.jsonc` 和本地 KV。若要沿用已有的 `wrangler.toml`，使用 `pnpm run dev --config wrangler.toml`；`.dev.vars` 中同名的值会覆盖该文件中的变量。
 
 ## 相关资源
 

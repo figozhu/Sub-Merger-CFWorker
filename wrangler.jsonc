@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Cloudflare 一键部署使用的公开配置；已有本地配置请显式传入 --config wrangler.toml。
+  "name": "sub-merger",
+  "main": "src/index.tsx",
+  "compatibility_date": "2024-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  // PASSWORD、SALT、MAGIC 由 .dev.vars.example 声明，在部署向导中设置为 Secrets。
+  "vars": {
+    "TABLENAME": "dbSUB",
+    "KEY_VERSION": "1",
+    "INSTANT_REFRESH_INTERVAL": "300",
+    "NOTIFICATION": {
+      "BARK_OPENID": ""
+    },
+    "ONETIME_PATTERN": {
+      "EXCLUDE_PATTERN": "剩余流量|距离下次|套餐|官|刷新|购买|余额|失联|建议|TG群|时间|全场|折扣|永久|国内|公网|直连"
+    },
+    "SUBSCRIBE_PATTERN": {
+      "EXCLUDE_PATTERN": "剩余流量|距离下次|套餐|官|刷新|购买|余额|失联|建议|TG群|时间|全场|折扣|永久|国内|公网|直连"
+    }
+  },
+  "triggers": {
+    "crons": ["0 */1 * * *"]
+  },
+  // 占位 ID 会在一键部署时替换为新建 KV 的真实 ID；手动部署请使用自己的 wrangler.toml。
+  "kv_namespaces": [
+    {
+      "binding": "SUB_MERGER_KV",
+      "id": "00000000000000000000000000000000"
+    }
+  ]
+}
