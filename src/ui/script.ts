@@ -344,7 +344,7 @@ export const consoleClientScript = String.raw`
   function renderGlobalUserAgent() {
     const busy = state.busy.has('subscriptionSettings');
     const disabled = busy || state.userAgent === state.userAgentBaseline;
-    return '<section class="data-panel subscription-ua-panel"><h2>全局 User-Agent</h2><p id="global-ua-help">适用于全部订阅源。留空使用代码默认值：<code>' + escapeHtml(state.defaultUserAgent) + '</code>。</p>'
+    return '<section class="data-panel subscription-ua-panel"><h2>全局 User-Agent</h2><p id="global-ua-help">适用于全部订阅源。留空使用默认值：<code>' + escapeHtml(state.defaultUserAgent) + '</code>。</p>'
       + '<div class="global-ua-controls"><label class="field"><span>自定义 UA（可选）</span><input id="global-user-agent" aria-label="全局 User-Agent" aria-describedby="global-ua-help global-ua-error"' + (state.userAgentError ? ' aria-invalid="true"' : '') + ' value="' + escapeHtml(state.userAgent) + '" placeholder="留空使用 ' + escapeHtml(state.defaultUserAgent) + '" maxlength="256" spellcheck="false" autocomplete="off"></label>'
       + '<button type="button" class="button secondary" data-action="save-subscription-settings" data-busy-key="subscriptionSettings"' + (disabled ? ' disabled' : '') + ' aria-busy="' + busy + '">' + (busy ? '保存中…' : '保存 UA') + '</button></div>'
       + '<small class="field-error" id="global-ua-error" role="alert">' + escapeHtml(state.userAgentError) + '</small></section>';
@@ -412,7 +412,7 @@ export const consoleClientScript = String.raw`
       options.push('<option value="builtin:REJECT"' + (selected === 'builtin:REJECT' ? ' selected' : '') + '>REJECT</option>');
       if (selected.indexOf('legacy-target:') === 0) {
         const legacyName = selected.slice('legacy-target:'.length) || '未命名节点';
-        options.push('<option value="' + escapeHtml(selected) + '" selected>直接节点：' + escapeHtml(legacyName) + '（迁移保留）</option>');
+        options.push('<option value="' + escapeHtml(selected) + '" selected>直接节点：' + escapeHtml(legacyName) + '</option>');
       } else if (selected && selected !== 'builtin:DIRECT' && selected !== 'builtin:REJECT'
         && !state.routing.config.groups.some(function (group) { return group.id === selected; })) {
         options.push('<option value="' + escapeHtml(selected) + '" selected>未知目标：' + escapeHtml(selected) + '（请重新选择）</option>');
@@ -492,7 +492,7 @@ export const consoleClientScript = String.raw`
       + (group.type === 'url-test' ? '<label class="field"><span>延迟容差</span><input type="number" min="0" data-group-health="tolerance" value="' + escapeHtml(health.tolerance || 0) + '"></label>' : '')
       + (group.type === 'load-balance' ? '<label class="field"><span>负载策略</span><select data-group-health="strategy"><option value="consistent-hashing"' + (health.strategy === 'consistent-hashing' ? ' selected' : '') + '>consistent-hashing</option><option value="round-robin"' + (health.strategy === 'round-robin' ? ' selected' : '') + '>round-robin</option></select></label>' : '') + '</div></section>' : '';
     return '<div class="nested-group-settings"><section class="form-section first-section"><div class="section-heading source-heading"><div><h3>成员来源</h3><p>按从上到下的顺序生成节点，并自动去重。</p></div><div class="button-cluster"><button class="button secondary small" data-action="add-source" data-kind="filter">添加筛选器</button><button class="button secondary small" data-action="add-source" data-kind="group">引用策略组</button><button class="button secondary small" data-action="add-source" data-kind="builtin">内置策略</button></div></div><div class="source-list">' + group.sources.map(function (source, index) { return renderSourceCard(source, group, index); }).join('') + '</div></section>'
-      + healthFields + '<section class="form-section"><div class="section-heading"><div><h3>节点匹配预览</h3><p>基于最近一次真实订阅预览。</p></div><strong class="preview-count">' + preview.count + ' 个节点</strong></div><div class="node-preview-list" role="list" aria-label="匹配到的节点">' + (previewNames ? previewNames + remainingNodeSummary : '<span class="node-preview-empty">尚未生成预览，点击右侧“预览完整 YAML”获取真实节点匹配。</span>') + '</div></section></div>';
+      + healthFields + '<section class="form-section"><div class="section-heading"><div><h3>节点匹配预览</h3><p>最近一次预览的匹配结果。</p></div><strong class="preview-count">' + preview.count + ' 个节点</strong></div><div class="node-preview-list" role="list" aria-label="匹配到的节点">' + (previewNames ? previewNames + remainingNodeSummary : '<span class="node-preview-empty">点击“预览完整 YAML”查看匹配节点。</span>') + '</div></section></div>';
   }
 
   /**
@@ -545,16 +545,16 @@ export const consoleClientScript = String.raw`
     const empty = keyword
       ? '<div class="empty-rule-group"><strong>没有匹配的规则</strong><span>清除搜索条件后再试。</span></div>'
       : isFallbackGroup
-        ? '<div class="empty-rule-group"><strong>未归组规则已全部处理</strong><span>目标改为真实策略组后，规则会自动移出这里。</span></div>'
+        ? '<div class="empty-rule-group"><strong>暂无未归组规则</strong><span>直接指向节点、DIRECT 或 REJECT 的规则会显示在这里。</span></div>'
         : '<button class="empty-rule-group" data-action="add-rule"><strong>这个策略组还没有分流规则</strong><span>添加第一条规则，目标将自动设置为当前策略组。</span></button>';
     const description = state.groupRuleScope === 'global'
-      ? '检查最终 YAML 的真实顺序，并处理跨策略组规则。'
+      ? '规则按从上到下的顺序匹配。'
       : isFallbackGroup
-        ? '这些规则直接指向 DIRECT、REJECT、节点或未知目标；请选择真实策略组完成归类。'
-        : '新规则自动归属“' + escapeHtml(group.name) + '”，无需重复选择目标。';
+        ? '直接指向 DIRECT、REJECT 或节点的规则，可在此调整目标。'
+        : '';
     const addButton = isFallbackGroup ? '' : '<button class="button primary small" data-action="add-rule">添加规则</button>';
     const localScopeLabel = isFallbackGroup ? '未归组规则' : '当前策略组';
-    return '<section class="nested-rules-panel"><div class="nested-section-heading"><div><h3>分流规则</h3><p>' + description + '</p></div>' + addButton + '</div>'
+    return '<section class="nested-rules-panel"><div class="nested-section-heading"><div><h3>分流规则</h3>' + (description ? '<p>' + description + '</p>' : '') + '</div>' + addButton + '</div>'
       + '<div class="nested-rule-toolbar"><div class="segmented-control nested-rule-scope" aria-label="规则显示范围"><button class="' + (state.groupRuleScope === 'group' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="group" aria-pressed="' + (state.groupRuleScope === 'group') + '">' + localScopeLabel + ' <span>' + groupRules.length + '</span></button><button class="' + (state.groupRuleScope === 'global' ? 'active' : '') + '" data-action="group-rule-scope" data-scope="global" aria-pressed="' + (state.groupRuleScope === 'global') + '">全局顺序 <span>' + rules.length + '</span></button></div><label class="nested-rule-search"><input id="rule-search" value="' + escapeHtml(state.ruleQuery) + '" placeholder="搜索类型、内容、备注或分类" aria-label="搜索规则"></label></div>'
       + selectedToolbar + '<div class="nested-rule-list">' + (rows || empty) + '</div></section>';
   }
@@ -579,18 +579,18 @@ export const consoleClientScript = String.raw`
       ? '<div class="entity-row unified-group-row ' + (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID ? 'active ' : '') + '"><button class="group-row-select" data-action="select-group" data-id="' + UNASSIGNED_RULES_GROUP_ID + '" aria-pressed="' + (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID) + '"><span class="entity-copy"><strong>未归组规则</strong><small>DIRECT / REJECT / 直接节点</small></span><span class="group-rule-badge">' + unassignedRules.length + ' 条</span></button></div>'
       : '';
     const rows = groupRows + fallbackRow;
-    const unassignedSummary = unassignedRules.length ? ' · ' + unassignedRules.length + ' 条待归组' : '';
-    const left = '<section class="entity-panel group-list-panel unified-group-list"><div class="panel-header"><div><h2>策略组</h2><p>' + config.groups.filter(function (group) { return group.enabled; }).length + ' 个已启用' + unassignedSummary + ' · 选择后配置其分流</p></div><button class="icon-button brand" data-action="add-group" aria-label="新建策略组">新增</button></div><div class="panel-search"><input id="group-search" value="' + escapeHtml(state.groupQuery) + '" placeholder="搜索名称或类型" aria-label="搜索策略组"></div><div class="entity-list" aria-label="策略组列表">' + (rows || '<div class="empty-search">未找到策略组</div>') + '</div></section>';
+    const unassignedSummary = unassignedRules.length ? ' · ' + unassignedRules.length + ' 条未归组' : '';
+    const left = '<section class="entity-panel group-list-panel unified-group-list"><div class="panel-header"><div><h2>策略组</h2><p>' + config.groups.filter(function (group) { return group.enabled; }).length + ' 个已启用' + unassignedSummary + '</p></div><button class="icon-button brand" data-action="add-group" aria-label="新建策略组">新增</button></div><div class="panel-search"><input id="group-search" value="' + escapeHtml(state.groupQuery) + '" placeholder="搜索名称或类型" aria-label="搜索策略组"></div><div class="entity-list" aria-label="策略组列表">' + (rows || '<div class="empty-search">未找到策略组</div>') + '</div></section>';
     if (state.selectedGroupId === UNASSIGNED_RULES_GROUP_ID) {
       const fallbackGroup = { id: UNASSIGNED_RULES_GROUP_ID, name: '未归组规则' };
-      const center = '<section class="editor-panel group-editor unified-group-editor"><div class="panel-header unified-editor-header"><div><h2>未归组规则</h2><p>仅用于管理，不会生成 proxy-group · ' + unassignedRules.length + ' 条待处理</p></div></div>'
+      const center = '<section class="editor-panel group-editor unified-group-editor"><div class="panel-header unified-editor-header"><div><h2>未归组规则</h2><p>' + unassignedRules.length + ' 条分流规则</p></div></div>'
         + '<div class="unified-editor-scroll" id="group-pane-panel">' + renderNestedRules(fallbackGroup) + '</div></section>';
       return { left: left, center: center };
     }
     const group = config.groups.find(function (item) { return item.id === state.selectedGroupId; });
     if (!group) return { left: left, center: '<section class="editor-panel centered-empty"><h2>选择一个策略组</h2><p>选择后可在同一处配置其分流规则与成员来源。</p></section>' };
     const ruleCount = config.rules.filter(function (rule) { return rule.targetGroupId === group.id; }).length;
-    const center = '<section class="editor-panel group-editor unified-group-editor"><div class="panel-header unified-editor-header"><div><h2>' + escapeHtml(group.name || '未命名策略组') + '</h2><p>稳定 ID：' + escapeHtml(group.id) + ' · ' + ruleCount + ' 条归属规则</p></div><div class="panel-header-actions"><label class="switch-label"><span>已启用</span><input type="checkbox" data-group-field="enabled"' + (group.enabled ? ' checked' : '') + '><span class="switch-control" aria-hidden="true"></span></label><button class="icon-button" data-action="duplicate-group">复制</button><button class="icon-button danger" data-action="delete-group">删除</button></div></div>'
+    const center = '<section class="editor-panel group-editor unified-group-editor"><div class="panel-header unified-editor-header"><div><h2>' + escapeHtml(group.name || '未命名策略组') + '</h2><p>' + ruleCount + ' 条分流规则</p></div><div class="panel-header-actions"><label class="switch-label"><span>已启用</span><input type="checkbox" data-group-field="enabled"' + (group.enabled ? ' checked' : '') + '><span class="switch-control" aria-hidden="true"></span></label><button class="icon-button" data-action="duplicate-group">复制</button><button class="icon-button danger" data-action="delete-group">删除</button></div></div>'
       + '<div class="unified-group-context"><label class="field"><span>策略组名称</span><input data-group-field="name" value="' + escapeHtml(group.name) + '"></label><label class="field"><span>策略类型</span><select data-group-field="type"><option value="select"' + (group.type === 'select' ? ' selected' : '') + '>手动选择（select）</option><option value="url-test"' + (group.type === 'url-test' ? ' selected' : '') + '>自动测速（url-test）</option><option value="fallback"' + (group.type === 'fallback' ? ' selected' : '') + '>故障转移（fallback）</option><option value="load-balance"' + (group.type === 'load-balance' ? ' selected' : '') + '>负载均衡（load-balance）</option></select></label><label class="field"><span>输出条件</span><select data-group-field="visibility"><option value="always"' + ((group.visibility || 'always') === 'always' ? ' selected' : '') + '>始终输出</option><option value="withSelfNodes"' + (group.visibility === 'withSelfNodes' ? ' selected' : '') + '>仅有自建节点时输出</option></select></label></div>'
       + '<div class="group-pane-tabs" role="tablist" aria-label="策略组配置区域"><button class="' + (state.groupPane === 'rules' ? 'active' : '') + '" data-action="group-pane" data-pane="rules" role="tab" aria-selected="' + (state.groupPane === 'rules') + '" aria-controls="group-pane-panel" tabindex="' + (state.groupPane === 'rules' ? '0' : '-1') + '">分流规则 <span>' + ruleCount + '</span></button><button class="' + (state.groupPane === 'settings' ? 'active' : '') + '" data-action="group-pane" data-pane="settings" role="tab" aria-selected="' + (state.groupPane === 'settings') + '" aria-controls="group-pane-panel" tabindex="' + (state.groupPane === 'settings' ? '0' : '-1') + '">成员与检测 <span>' + group.sources.length + '</span></button></div>'
       + '<div class="unified-editor-scroll" id="group-pane-panel" role="tabpanel">' + (state.groupPane === 'rules' ? renderNestedRules(group) : renderGroupSettings(group)) + '</div></section>';
@@ -645,12 +645,12 @@ export const consoleClientScript = String.raw`
       return '<button class="outline-row ' + (conflict ? 'conflict' : '') + '" data-action="locate-yaml" data-line="' + item.line + '"><span>' + escapeHtml(item.key) + '</span><small>第 ' + item.line + ' 行</small></button>';
     }).join('');
     const lines = text.split('\n').map(function (_, index) { return '<span>' + (index + 1) + '</span>'; }).join('');
-    const left = '<section class="entity-panel yaml-outline-panel"><div class="panel-header"><div><h2>顶级字段</h2><p>' + outline.length + ' 个字段</p></div></div><div class="outline-list">' + (outlineRows || '<div class="empty-search">空 Mapping</div>') + '</div></section>';
+    const left = '<section class="entity-panel yaml-outline-panel"><div class="panel-header"><div><h2>顶级字段</h2><p>' + outline.length + ' 个字段</p></div></div><div class="outline-list">' + (outlineRows || '<div class="empty-search">暂无配置项</div>') + '</div></section>';
     const validationClass = managedConflicts.length ? 'invalid' : 'pending';
     const validationCopy = managedConflicts.length
-      ? '检测到 ' + managedConflicts.length + ' 个受管字段，请移到对应可视化编辑区'
-      : text.split('\n').length + ' 行；保存或发布时由服务端检查语法与重复键';
-    const center = '<section class="editor-panel base-yaml-editor"><div class="panel-header"><div><h2>YAML 模板</h2><p>仅维护 DNS、TUN、profile 等非受管字段</p></div><div class="panel-header-actions"><button class="button secondary small" data-action="reset-base-yaml">恢复默认</button><button class="button secondary small" data-action="format-base-yaml">整理格式</button><button class="button primary small" data-action="preview-routing">完整输出</button></div></div><div class="code-editor-grid base-code-grid"><div class="yaml-line-rail" id="yaml-line-rail" aria-hidden="true">' + lines + '</div><textarea id="base-yaml-editor" class="base-yaml-textarea" spellcheck="false" aria-label="YAML 模板">' + escapeHtml(text) + '</textarea></div><div class="editor-validation ' + validationClass + '"><span>' + validationCopy + '</span></div></section>';
+      ? '检测到 ' + managedConflicts.length + ' 个字段需在节点、策略组或规则页面编辑'
+      : text.split('\n').length + ' 行；保存或发布时检查 YAML 格式';
+    const center = '<section class="editor-panel base-yaml-editor"><div class="panel-header"><div><h2>YAML 模板</h2><p>DNS、TUN、profile 等基础选项</p></div><div class="panel-header-actions"><button class="button secondary small" data-action="reset-base-yaml">恢复默认</button><button class="button secondary small" data-action="format-base-yaml">整理格式</button><button class="button primary small" data-action="preview-routing">完整输出</button></div></div><div class="code-editor-grid base-code-grid"><div class="yaml-line-rail" id="yaml-line-rail" aria-hidden="true">' + lines + '</div><textarea id="base-yaml-editor" class="base-yaml-textarea" spellcheck="false" aria-label="YAML 模板">' + escapeHtml(text) + '</textarea></div><div class="editor-validation ' + validationClass + '"><span>' + validationCopy + '</span></div></section>';
     return { left: left, center: center };
   }
 
@@ -666,7 +666,7 @@ export const consoleClientScript = String.raw`
     const isCurrent = hasValidated && state.routingValidatedSnapshot === currentSnapshot;
     const validationTone = !hasValidated ? 'is-idle' : !isCurrent ? 'is-stale' : errors.length ? 'has-error' : 'is-ready';
     const validationTitle = !hasValidated ? '尚未校验' : !isCurrent ? '配置已更改' : errors.length ? errors.length + ' 个错误' : '校验已通过';
-    const emptyMessage = !hasValidated ? '修改完成后运行一次校验' : !isCurrent ? '请重新校验后再发布' : '尚无阻断问题';
+    const emptyMessage = !hasValidated ? '修改完成后运行一次校验' : !isCurrent ? '请重新校验后再发布' : '未发现配置错误';
     const issues = errors.concat(warnings).slice(0, 6).map(function (issue) {
       return '<div class="issue-row ' + (errors.indexOf(issue) >= 0 ? 'error' : 'warning') + '"><div><strong>' + escapeHtml(issue.message) + '</strong><span>' + escapeHtml(issue.path) + '</span></div></div>';
     }).join('');
@@ -683,7 +683,7 @@ export const consoleClientScript = String.raw`
   function renderRoutingPage() {
     if (!state.routing) return '<div class="loading-screen">正在加载路由配置…</div>';
     const dirty = JSON.stringify(state.routing.config) !== state.routingBaseline;
-    const status = dirty ? '有未保存更改' : state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : (state.routing.initialized ? '默认配置待保存' : state.routing.migrated ? '迁移草稿待检查' : '草稿已保存');
+    const status = dirty ? '有未保存更改' : state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : (state.routing.initialized ? '默认配置待保存' : state.routing.migrated ? '旧配置待确认' : '草稿已保存');
     const actions = '<button class="button ghost" data-action="import-routing">导入 YAML</button><button class="button secondary" data-action="preview-routing">完整输出</button><button class="button secondary" data-action="validate-routing" data-busy-key="routingValidate">校验</button><button class="button secondary" data-action="save-routing" data-busy-key="routingSave"' + (!dirty && !state.routing.migrated && !state.routing.initialized ? ' disabled' : '') + '>保存草稿</button><button class="button primary" data-action="publish-routing" data-busy-key="routingPublish">发布</button>';
     const counts = { groups: state.routing.config.groups.length, rules: state.routing.config.rules.length, providers: state.routing.config.providers.length };
     const tabs = [
@@ -694,7 +694,9 @@ export const consoleClientScript = String.raw`
     else if (state.routingTab === 'providers') content = renderProvidersWorkspace();
     else content = renderBaseYamlWorkspace();
     return pageHeader('路由配置', status, dirty ? 'dirty' : 'saved', actions)
-      + '<div class="studio-tabs" role="tablist" aria-label="路由配置区域">' + tabs + '</div><div class="studio-content" id="routing-tab-panel" role="tabpanel"><div class="studio-grid ' + (state.routingTab === 'base' ? 'base-studio-grid' : '') + '">' + content.left + content.center + (state.routingTab === 'base' ? '' : renderInspector()) + '</div></div>';
+      + '<div class="studio-tabs" role="tablist" aria-label="路由配置区域">' + tabs + '</div>'
+      + (state.routingTab === 'base' ? '' : '<div class="rule-source-reference"><a href="https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Clash/README.md" target="_blank" rel="noopener noreferrer">blackmatrix7 规则目录 ↗</a><span>YouTube、Telegram 等服务的 Clash 规则集，可在「规则提供者」中添加所选规则集的下载地址。</span></div>')
+      + '<div class="studio-content" id="routing-tab-panel" role="tabpanel"><div class="studio-grid ' + (state.routingTab === 'base' ? 'base-studio-grid' : '') + '">' + content.left + content.center + (state.routingTab === 'base' ? '' : renderInspector()) + '</div></div>';
   }
 
   /**
@@ -870,7 +872,7 @@ export const consoleClientScript = String.raw`
     const diagnosing = state.busy.has('diagnose');
     const isAccess = state.logsCategory === 'access';
     const actions = '<button class="button secondary" data-action="refresh-logs"' + (state.logsLoading ? ' disabled' : '') + '>刷新日志</button>';
-    const diagnosticPanel = '<section class="data-panel diagnostic-panel"><h2>订阅源诊断</h2><p class="log-hint">从当前 Worker 直接请求已保存的订阅源，最多等待 20 秒；不使用或修改正式订阅缓存。</p>'
+    const diagnosticPanel = '<section class="data-panel diagnostic-panel"><h2>订阅源诊断</h2><p class="log-hint">检查订阅源能否正常获取节点，最多等待 20 秒。</p>'
       + '<div class="diagnostic-controls"><label><span>已保存的订阅源</span><select id="diagnostic-source" aria-label="诊断订阅源">' + (options || '<option>暂无已保存的源</option>') + '</select></label>'
       + '<label><span>临时 User-Agent（可选）</span><input id="diagnostic-ua" value="' + escapeHtml(state.diagnosticUserAgent) + '" placeholder="留空使用当前配置，可填写 Clash.Meta" maxlength="256" spellcheck="false"></label>'
       + '<button class="button primary" data-action="diagnose-subscription"' + (!saved.length || diagnosing ? ' disabled' : '') + ' aria-busy="' + diagnosing + '">' + (diagnosing ? '诊断中…' : '开始诊断') + '</button></div>'
@@ -882,7 +884,7 @@ export const consoleClientScript = String.raw`
     const note = isAccess ? '记录客户端拉取订阅的来源 IP、客户端 UA、访问时间和响应状态，包含缓存请求及失败请求。' : '记录抓取、解析和运行错误；成功记录来自主动诊断。';
     return pageHeader('错误日志', state.logsLoading ? '正在读取…' : state.logs.length + ' 条已加载', 'saved', actions)
       + '<div class="workspace-content logs-workspace">' + (!isAccess ? diagnosticPanel : '')
-      + '<section class="data-panel log-list-panel"><div class="simple-panel-head"><h2>' + (isAccess ? '订阅访问记录' : '最近诊断记录') + '</h2><span>保留 7 天 · 每页 50 条</span></div><div class="log-category-tabs" role="group" aria-label="日志分类">' + categories + '</div><p class="log-retention-note">' + note + ' KV 同步可能延迟，刚写入的记录可稍后刷新。</p>'
+      + '<section class="data-panel log-list-panel"><div class="simple-panel-head"><h2>' + (isAccess ? '订阅访问记录' : '最近诊断记录') + '</h2><span>保留 7 天 · 每页 50 条</span></div><div class="log-category-tabs" role="group" aria-label="日志分类">' + categories + '</div><p class="log-retention-note">' + note + ' 新记录可能稍有延迟，可稍后刷新。</p>'
       + (state.logsError ? '<p class="inline-error" role="alert">' + escapeHtml(state.logsError) + '</p>' : '')
       + '<div class="log-list">' + (state.logs.map(renderLogEntry).join('') || '<div class="empty-list">' + (state.logsLoading ? '正在读取日志…' : state.logsError ? '日志读取失败，请点击刷新重试' : isAccess ? '暂无客户端订阅访问记录' : '暂无日志；可选择订阅源执行诊断') + '</div>') + '</div>'
       + (state.logsCursor ? '<div class="log-pagination"><button class="button secondary" data-action="more-logs"' + (state.logsLoading ? ' disabled' : '') + '>加载更多</button></div>' : '') + '</section></div>';
@@ -1224,7 +1226,7 @@ export const consoleClientScript = String.raw`
       state.routingIssues = data.validation || { errors: [], warnings: [] };
       state.routingValidatedSnapshot = JSON.stringify(state.routing.config);
       render();
-      showToast('修订 ' + data.revision + ' 已发布', 'success', '两类订阅缓存已清理');
+      showToast('修订 ' + data.revision + ' 已发布', 'success', '更新客户端订阅后生效');
     } catch (error) {
       if (error.status === 409) showToast('发布版本已过期', 'error', '请刷新页面后重新应用更改');
       else {
@@ -1241,7 +1243,7 @@ export const consoleClientScript = String.raw`
   function openPreviewDrawer() {
     overlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     overlayNeedsRender = false;
-    overlayRoot.innerHTML = '<div class="drawer-backdrop"><aside class="yaml-drawer" role="dialog" aria-modal="true" aria-labelledby="preview-title" aria-describedby="preview-description"><div class="drawer-header"><div><h2 id="preview-title">完整输出</h2><p id="preview-description">使用当前草稿和真实节点，预览不会写 KV 或缓存</p></div><button class="icon-button" data-action="close-preview" aria-label="关闭完整输出预览">关闭</button></div><div class="preview-controls"><label><span>客户端</span><select id="preview-client"><option value="normal">通用</option><option value="stash">Stash</option></select></label><label><span>订阅类型</span><select id="preview-output"><option value="monthly">包年/包月</option><option value="trafficPackage">流量包</option></select></label><button class="button secondary" id="refresh-preview">生成预览</button><button class="button primary" id="copy-preview" disabled>复制 YAML</button></div><div class="yaml-preview-meta"><span id="preview-status" role="status" aria-live="polite">准备生成预览…</span><span>可纵向与横向滚动查看</span></div><pre class="yaml-preview" id="yaml-preview" tabindex="0" aria-label="完整 YAML 内容" aria-busy="true">正在生成真实预览…</pre></aside></div>';
+    overlayRoot.innerHTML = '<div class="drawer-backdrop"><aside class="yaml-drawer" role="dialog" aria-modal="true" aria-labelledby="preview-title" aria-describedby="preview-description"><div class="drawer-header"><div><h2 id="preview-title">完整输出</h2><p id="preview-description">预览当前草稿的订阅配置</p></div><button class="icon-button" data-action="close-preview" aria-label="关闭完整输出预览">关闭</button></div><div class="preview-controls"><label><span>客户端</span><select id="preview-client"><option value="normal">通用</option><option value="stash">Stash</option></select></label><label><span>订阅类型</span><select id="preview-output"><option value="monthly">包年/包月</option><option value="trafficPackage">流量包</option></select></label><button class="button secondary" id="refresh-preview">生成预览</button><button class="button primary" id="copy-preview" disabled>复制 YAML</button></div><div class="yaml-preview-meta"><span id="preview-status" role="status" aria-live="polite">准备生成预览…</span></div><pre class="yaml-preview" id="yaml-preview" tabindex="0" aria-label="完整 YAML 内容" aria-busy="true">正在生成预览…</pre></aside></div>';
     overlayRoot.querySelector('[data-action="close-preview"]').addEventListener('click', closeOverlay);
     overlayRoot.querySelector('.drawer-backdrop').addEventListener('click', closeOverlay);
     overlayRoot.querySelector('.yaml-drawer').addEventListener('click', function (event) { event.stopPropagation(); });
@@ -1271,7 +1273,7 @@ export const consoleClientScript = String.raw`
     preview.classList.remove('is-error');
     preview.setAttribute('aria-busy', 'true');
     preview.removeAttribute('role');
-    status.textContent = '正在解析订阅并生成真实预览…';
+    status.textContent = '正在获取节点并生成预览…';
     copyButton.disabled = true;
     refreshButton.disabled = true;
     refreshButton.setAttribute('aria-busy', 'true');
@@ -1331,15 +1333,15 @@ export const consoleClientScript = String.raw`
     const items = analyzeYamlOutline(state.routing.config.baseYaml);
     const outline = document.querySelector('.outline-list');
     if (outline) {
-      outline.innerHTML = items.map(function (item) { return '<button class="outline-row ' + (MANAGED_YAML_KEYS.indexOf(item.key) >= 0 ? 'conflict' : '') + '" data-action="locate-yaml" data-line="' + item.line + '"><span>' + escapeHtml(item.key) + '</span><small>第 ' + item.line + ' 行</small></button>'; }).join('') || '<div class="empty-search">空 Mapping</div>';
+      outline.innerHTML = items.map(function (item) { return '<button class="outline-row ' + (MANAGED_YAML_KEYS.indexOf(item.key) >= 0 ? 'conflict' : '') + '" data-action="locate-yaml" data-line="' + item.line + '"><span>' + escapeHtml(item.key) + '</span><small>第 ' + item.line + ' 行</small></button>'; }).join('') || '<div class="empty-search">暂无配置项</div>';
     }
     const conflicts = items.filter(function (item) { return MANAGED_YAML_KEYS.indexOf(item.key) >= 0; });
     const validation = document.querySelector('.base-yaml-editor .editor-validation');
     if (validation) {
       validation.className = 'editor-validation ' + (conflicts.length ? 'invalid' : 'pending');
       validation.textContent = conflicts.length
-        ? '检测到 ' + conflicts.length + ' 个受管字段，请移到对应可视化编辑区'
-        : state.routing.config.baseYaml.split('\n').length + ' 行；保存或发布时由服务端检查语法与重复键';
+        ? '检测到 ' + conflicts.length + ' 个字段需在节点、策略组或规则页面编辑'
+        : state.routing.config.baseYaml.split('\n').length + ' 行；保存或发布时检查 YAML 格式';
     }
     const rail = document.getElementById('yaml-line-rail');
     if (rail) rail.innerHTML = state.routing.config.baseYaml.split('\n').map(function (_, index) { return '<span>' + (index + 1) + '</span>'; }).join('');
@@ -1366,7 +1368,7 @@ export const consoleClientScript = String.raw`
       status.className = 'workspace-status saved';
       const cleanText = state.activeNav === 'subscriptions' ? state.subscriptions.length + ' 个订阅源'
         : state.activeNav === 'nodes' ? state.selfNodeAnalysis.nodes.length + ' 个节点'
-        : state.activeNav === 'routing' ? (state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : state.routing.initialized ? '默认配置待保存' : state.routing.migrated ? '迁移草稿待检查' : '草稿已保存') : '';
+        : state.activeNav === 'routing' ? (state.routing.revision > 0 ? '修订 ' + state.routing.revision + ' 已发布' : state.routing.initialized ? '默认配置待保存' : state.routing.migrated ? '旧配置待确认' : '草稿已保存') : '';
       status.innerHTML = '<span class="workspace-status-dot"></span>' + escapeHtml(cleanText);
     }
     const saveSelector = state.activeNav === 'subscriptions' ? '[data-action="save-subscriptions"]' : state.activeNav === 'routing' ? '[data-action="save-routing"]' : '';
@@ -1545,7 +1547,7 @@ export const consoleClientScript = String.raw`
         if (state.userAgent === submittedUserAgent) state.userAgent = data.userAgent;
         state.userAgentBaseline = data.userAgent;
         state.defaultUserAgent = data.defaultUserAgent;
-        showToast('全局 UA 已保存', 'success', data.userAgent ? '全部订阅源使用自定义 UA，两类缓存已清理' : '已恢复代码默认值 ' + data.defaultUserAgent + '，两类缓存已清理');
+        showToast('全局 UA 已保存', 'success', data.userAgent ? '下次获取订阅源时使用自定义 UA' : '已恢复默认值 ' + data.defaultUserAgent);
       } catch (error) {
         state.userAgentError = (error.errors || []).find(function (issue) { return issue.path === 'userAgent'; })?.message || error.message;
         showToast('UA 保存失败', 'error', state.userAgentError);
@@ -1608,7 +1610,7 @@ export const consoleClientScript = String.raw`
         state.subscriptionErrors = {};
         state.outputs = (await api('/api/outputs')).outputs;
         render();
-        showToast('订阅源已保存', 'success', '两类正式缓存已清理');
+        showToast('订阅源已保存', 'success', '更新客户端订阅即可使用');
       } catch (error) {
         (error.errors || []).forEach(function (issue) {
           const match = /subscriptions\[(\d+)\]\.(\w+)/.exec(issue.path);
@@ -1635,7 +1637,7 @@ export const consoleClientScript = String.raw`
         state.selfNodesBaseline = data.raw;
         state.selfNodeAnalysis = analyzeSelfNodes(data.raw);
         render();
-        showToast('自建节点已保存', 'success', '未知协议字段已完整保留');
+        showToast('自建节点已保存', 'success', '更新客户端订阅即可使用');
       } catch (error) { showToast('节点保存失败', 'error', error.message); }
       finally { setBusy('selfNodes', false); }
     } else if (action === 'copy-output') {
@@ -1799,7 +1801,7 @@ export const consoleClientScript = String.raw`
     } else if (action === 'preview-routing') {
       openPreviewDrawer();
     } else if (action === 'import-routing') {
-      openModal('从完整 Clash YAML 导入', '<p class="modal-help">将拆分策略组、路由规则、规则提供者和基础 YAML；运行时 proxies 不会写入草稿。导入后仍需校验并主动发布。</p><label class="field"><span>完整 Clash YAML</span><textarea id="import-yaml" class="import-textarea" spellcheck="false" placeholder="粘贴完整 Clash YAML"></textarea></label><div class="import-error-list" id="import-errors" role="alert"></div>', '解析并导入草稿', async function () {
+      openModal('从完整 Clash YAML 导入', '<p class="modal-help">导入策略组、分流规则和基础配置。节点请在“订阅源”或“自建节点”中添加。检查后发布生效。</p><label class="field"><span>完整 Clash YAML</span><textarea id="import-yaml" class="import-textarea" spellcheck="false" placeholder="粘贴完整 Clash YAML"></textarea></label><div class="import-error-list" id="import-errors" role="alert"></div>', '解析并导入草稿', async function () {
         const text = document.getElementById('import-yaml').value;
         try {
           const data = await api('/api/routing-config/import', { method: 'POST', body: JSON.stringify({ yaml: text }) });
@@ -1828,7 +1830,7 @@ export const consoleClientScript = String.raw`
             validationMessage = state.routingIssues.errors.length + ' 个校验问题待处理';
           }
           render();
-          showToast('完整 YAML 已拆分为当前草稿', validationTone, data.summary.groups + ' 个策略组 · ' + data.summary.rules + ' 条规则 · ' + data.summary.providers + ' 个提供者 · ' + data.summary.baseFields + ' 个基础字段；' + validationMessage);
+          showToast('已导入路由草稿', validationTone, data.summary.groups + ' 个策略组 · ' + data.summary.rules + ' 条规则 · ' + data.summary.providers + ' 个提供者 · ' + data.summary.baseFields + ' 个基础字段；' + validationMessage);
           return true;
         } catch (error) {
           const issues = error.errors && error.errors.length ? error.errors : [{ path: 'yaml', message: error.message }];

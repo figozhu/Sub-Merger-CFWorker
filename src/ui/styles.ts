@@ -1413,6 +1413,27 @@ textarea.code-input {
   overflow: hidden;
 }
 
+/* 规则目录与规则编辑页签相邻，窄屏允许简介换行，不挤占编辑栏宽度。 */
+.rule-source-reference {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.rule-source-reference a {
+  color: var(--brand-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .studio-grid {
   display: grid;
   grid-template-columns: 242px minmax(460px, 1fr) 282px;
