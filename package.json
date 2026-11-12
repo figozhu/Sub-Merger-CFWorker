@@ -18,6 +18,7 @@
   },
   "scripts": {
     "dev": "wrangler dev src/index.tsx --test-scheduled",
+    "deploy:local": "wrangler deploy --minify src/index.tsx --config wrangler.toml",
     "deploy": "wrangler deploy --minify src/index.tsx",
     "build": "wrangler deploy src/index.tsx --dry-run --outdir dist --name sub-merger --compatibility-date 2024-08-26 --compatibility-flags nodejs_compat",
     "typecheck": "tsc --noEmit",
