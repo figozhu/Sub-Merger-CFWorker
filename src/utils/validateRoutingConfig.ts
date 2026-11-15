@@ -38,6 +38,11 @@ const SUPPORTED_RULE_TYPES = new Set([
 ])
 const SUPPORTED_BUILTIN_TARGETS = new Set(['builtin:DIRECT', 'builtin:REJECT'])
 
+/** 只检查域名或进程、不依赖目标 IP 的规则类型；no-resolve 对这些条件没有作用。 */
+const RULE_TYPES_WITHOUT_DESTINATION_IP = new Set([
+  'DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'PROCESS-NAME', 'PROCESS-NAME-WILDCARD',
+])
+
 type UnknownRecord = Record<string, unknown>
 
 /**
@@ -574,7 +579,8 @@ function validateProviders(
  *
  * 为兼容旧配置，规则目标除启用策略组 ID 外还允许内置目标和直接节点名称。
  * 直接节点名称无法在静态配置校验阶段确认是否仍存在，因此作为提醒返回但不阻断迁移；
- * no-resolve 在旧配置的多种非 MATCH 规则上均有使用，因此仅禁止 MATCH 携带该选项。
+ * no-resolve 在旧配置的多种非 MATCH 规则上均有使用，因此仅禁止 MATCH 携带该选项；
+ * 对不依赖目标 IP 的组合及 CN/LAN 的解析行为只提醒，不改写配置或阻断旧配置迁移。
  *
  * @param rules 原始 rules 值。
  * @param enabledGroupsById 启用策略组 ID 映射。
@@ -646,6 +652,18 @@ function validateRules(
 
     if (rule.type === 'MATCH') enabledMatchIndexes.push(ruleIndex)
     if (!SUPPORTED_RULE_TYPES.has(String(rule.type))) return
+
+    if (rule.noResolve === true) {
+      const provider = rule.type === 'RULE-SET' && isNonEmptyString(rule.providerId)
+        ? enabledProvidersById.get(rule.providerId)
+        : undefined
+      // classical 规则集可随上游更新加入 IP/ASN 条件，静态校验不猜测其内容。
+      if (RULE_TYPES_WITHOUT_DESTINATION_IP.has(String(rule.type)) || provider?.behavior === 'domain') {
+        addIssue(warnings, 'RULE_NO_RESOLVE_INEFFECTIVE', `${rulePath}.noResolve`, '当前规则仅匹配域名或进程，no-resolve 对其匹配条件没有作用，可取消该选项')
+      } else if (rule.type === 'GEOIP' && typeof rule.value === 'string' && ['CN', 'LAN'].includes(rule.value.trim().toUpperCase())) {
+        addIssue(warnings, 'RULE_GEOIP_NO_RESOLVE', `${rulePath}.noResolve`, `GEOIP,${rule.value.trim().toUpperCase()} 启用 no-resolve 后不会为匹配触发目标 DNS 解析；Fake-IP 场景下尚无真实目标 IP 的域名可能跳过此规则，请确认符合预期`)
+      }
+    }
 
     if (rule.type === 'MATCH') {
       if (isNonEmptyString(rule.value)) {

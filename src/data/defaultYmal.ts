@@ -80,12 +80,12 @@ rule-providers:
 rules:
   # 私有网络专用域名直连
   - RULE-SET,private,直连
-  # 局域网与保留地址直连，不为 IP 规则额外触发 DNS 查询
-  - RULE-SET,lancidr,直连,no-resolve
+  # 局域网与保留地址直连，允许解析未被私有域名规则收录的域名
+  - RULE-SET,lancidr,直连
   # 国内可直连域名
   - RULE-SET,direct,直连
-  # 中国大陆 IP 直连，不为 IP 规则额外触发 DNS 查询
-  - RULE-SET,cncidr,直连,no-resolve
+  # 中国大陆 IP 直连，允许解析未被国内域名规则收录的域名以完成 IP 兜底
+  - RULE-SET,cncidr,直连
   # 其余流量统一走代理
   - MATCH,代理
 `

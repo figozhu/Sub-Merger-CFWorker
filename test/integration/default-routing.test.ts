@@ -11,10 +11,10 @@ import { SubscriptionType } from '../../src/types/types'
 import { createTestEnv, MockKV } from '../helpers/mockKv'
 import { legacyDefaultYaml } from '../fixtures/legacyRouting'
 
-/** 新安装只需四项直连规则及一个代理兜底，顺序也是实际匹配顺序。 */
+/** 新安装保留原有匹配顺序；LAN/CN 的 IP 兜底必须允许为未收录域名解析真实地址。 */
 const expectedRules = [
-  'RULE-SET,private,直连', 'RULE-SET,lancidr,直连,no-resolve',
-  'RULE-SET,direct,直连', 'RULE-SET,cncidr,直连,no-resolve', 'MATCH,代理',
+  'RULE-SET,private,直连', 'RULE-SET,lancidr,直连',
+  'RULE-SET,direct,直连', 'RULE-SET,cncidr,直连', 'MATCH,代理',
 ]
 
 /** @param env 独立测试环境。@returns 已认证的 JSON API 请求头。 */
@@ -86,7 +86,7 @@ describe('通用初始路由与旧配置隔离', () => {
 
   for (const output of ['monthly', 'trafficPackage'] as const) {
     for (const client of ['normal', 'stash'] as const) {
-      it(`${output}/${client}：未发布、完整预览与发布后输出一致`, async () => {
+      it(`${output}/${client}：未发布、完整预览与发布后输出一致，IP 兜底允许解析`, async () => {
         const env = createTestEnv()
         const subType = output === 'monthly' ? SubscriptionType.Monthly : SubscriptionType.TrafficPackage
         env.SUB_MERGER_KV.values.set('test-sub', JSON.stringify([
@@ -113,7 +113,11 @@ describe('通用初始路由与旧配置隔离', () => {
         expect(parsed['proxy-groups'][0].proxies).toEqual(['DIRECT'])
         expect(parsed['proxy-groups'][1].proxies).toEqual(parsed.proxies.map((node: any) => node.name))
         expect(parsed.proxies).toHaveLength(3)
+        // 检查实际生成的 Fake-IP 配置，覆盖两类订阅与通用/Stash 的规则、顺序及 IP 集类型。
         expect(parsed.rules).toEqual(expectedRules)
+        expect(parsed.dns['enhanced-mode']).toBe('fake-ip')
+        expect(parsed['rule-providers'].lancidr.behavior).toBe('ipcidr')
+        expect(parsed['rule-providers'].cncidr.behavior).toBe('ipcidr')
         expect(parsed.hosts).toBeUndefined()
         expect(parsed['proxy-groups'][1].proxies).not.toContain('DIRECT')
         await api(env, '/api/routing-config/publish', { config, baseRevision: 0 })
