@@ -2704,6 +2704,17 @@ textarea.code-input {
   white-space: nowrap;
 }
 
+/* 附加参数在窄屏中可换行；语法提示独占一行，避免挤压备注与分类输入。 */
+.nested-rule-options {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.nested-rule-hint {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+}
+
 .empty-rule-group {
   display: grid;
   width: 100%;

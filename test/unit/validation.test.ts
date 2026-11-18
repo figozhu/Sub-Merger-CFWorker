@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { validateRoutingConfig } from '../../src/utils/validateRoutingConfig'
+import { getRuleValueError } from '../../src/utils/routingRuleSyntax'
 import type { RoutingConfig, RoutingRuleType, RuleProviderBehavior } from '../../src/types/routing'
 
 /** 创建最小合法路由配置，供不同错误场景独立修改。 */
@@ -11,6 +12,23 @@ function validConfig(): RoutingConfig {
     providers: [],
     rules: [{ id: 'rule-match', enabled: true, category: 'general', type: 'MATCH', targetGroupId: 'group-main', noResolve: false }],
   }
+}
+
+/**
+ * 在合法配置的最终 MATCH 前插入待验证规则，子规则默认具有真实定义。
+ * @param type 待验证规则类型。
+ * @param value 管理员输入的匹配表达式。
+ * @returns 独立配置；测试只修改目标字段，避免其它校验错误掩盖问题。
+ */
+function configWithRule(type: RoutingRuleType, value: string): RoutingConfig {
+  const config = validConfig()
+  config.baseYaml += 'sub-rules:\n  child:\n    - MATCH,DIRECT\n'
+  config.rules.unshift({
+    id: 'rule-test', enabled: true, category: 'general', type, value, noResolve: false,
+    targetGroupId: type === 'SUB-RULE' ? '' : 'group-main',
+    ...(type === 'SUB-RULE' ? { subRuleName: 'child' } : {}),
+  })
+  return config
 }
 
 describe('validateRoutingConfig', () => {
@@ -93,6 +111,123 @@ describe('validateRoutingConfig', () => {
       valid: false,
       errors: [{ code: 'RULE_MATCH_NO_RESOLVE_FORBIDDEN', path: 'rules[0].noResolve' }],
       warnings: [],
+    })
+  })
+})
+
+describe('Mihomo 新规则的发布前校验', () => {
+  describe.each(['SRC-PORT', 'DST-PORT', 'IN-PORT'] as const)('%s 的端口格式', (type) => {
+    it.each(['65536', '-1', '45999-45000', '80,443', '80//443', '1.5'])('拒绝非法端口值 %s', (value) => {
+      const config = configWithRule(type, value)
+      const original = structuredClone(config)
+      expect(validateRoutingConfig(config)).toMatchObject({
+        valid: false,
+        errors: [{ code: 'RULE_VALUE_INVALID', path: 'rules[0].value' }],
+      })
+      expect(config).toEqual(original)
+    })
+
+    it('接受端口上下界与多个合法范围', () => {
+      expect(validateRoutingConfig(configWithRule(type, '0/80/443/45000-45999/65535')).errors).toEqual([])
+    })
+  })
+
+  it.each([
+    ['UID', '-1'], ['UID', '4294967296'], ['UID', '1002-1001'],
+    ['DSCP', '64'], ['DSCP', '-1'], ['DSCP', '4-2'],
+    ['NETWORK', 'icmp'], ['NETWORK', 'tcp/udp'],
+  ] as const)('拒绝 %s 的非法范围或协议 %s', (type, value) => {
+    expect(validateRoutingConfig(configWithRule(type, value))).toMatchObject({
+      valid: false, errors: [{ code: 'RULE_VALUE_INVALID', path: 'rules[0].value' }],
+    })
+  })
+
+  it.each([
+    ['UID', '0/1001-1002/4294967295'], ['DSCP', '0/4-8/63'], ['NETWORK', 'TCP'], ['NETWORK', 'udp'],
+  ] as const)('接受 %s 的合法边界与协议 %s', (type, value) => {
+    expect(getRuleValueError(type, value, new Set())).toBeNull()
+    expect(validateRoutingConfig(configWithRule(type, value)).errors).toEqual([])
+  })
+
+  it.each([
+    ['NOT', '((NETWORK,tcp),(DOMAIN,example.com))'],
+    ['AND', '(NETWORK,tcp)'],
+    ['OR', '((NETWORK,tcp)'],
+    ['AND', '((MATCH,DIRECT))'],
+    ['AND', '((SUB-RULE,(NETWORK,tcp),child))'],
+    ['NOT', '((OR,((MATCH,DIRECT),(NETWORK,tcp))))'],
+    ['SUB-RULE', 'NETWORK,tcp'],
+    ['SUB-RULE', '(NETWORK,tcp),(DOMAIN,example.com)'],
+  ] as const)('拒绝 %s 的无效逻辑表达式 %s', (type, value) => {
+    expect(validateRoutingConfig(configWithRule(type, value))).toMatchObject({
+      valid: false, errors: [{ code: 'RULE_VALUE_INVALID', path: 'rules[0].value' }],
+    })
+  })
+
+  it('逻辑条件的规则提供者必须真实存在且启用', () => {
+    const config = configWithRule('AND', '((RULE-SET,internal-rules),(NETWORK,tcp))')
+    expect(validateRoutingConfig(config).errors).toEqual([
+      expect.objectContaining({ code: 'RULE_VALUE_INVALID', path: 'rules[0].value', message: expect.stringContaining('internal-rules') }),
+    ])
+    config.providers.push({
+      id: 'provider-internal', name: 'internal-rules', enabled: true, type: 'http', behavior: 'classical',
+      url: 'https://example.test/internal.yaml', path: './internal.yaml', interval: 3600,
+    })
+    expect(validateRoutingConfig(config).errors).toEqual([])
+    config.providers[0].enabled = false
+    expect(validateRoutingConfig(config).errors).toEqual([
+      expect.objectContaining({ code: 'RULE_VALUE_INVALID', path: 'rules[0].value', message: expect.stringContaining('internal-rules') }),
+    ])
+  })
+
+  describe.each([
+    ['AND', '((NETWORK,tcp),(DOMAIN,example.com))'],
+    ['OR', '((NETWORK,tcp),(DOMAIN,example.com))'],
+    ['NOT', '((NETWORK,tcp))'],
+    ['SUB-RULE', '(NETWORK,tcp)'],
+    ['DOMAIN-REGEX', '^a{1,3}$'],
+    ['PROCESS-NAME-REGEX', '(?i)chrome'],
+    ['PROCESS-PATH-REGEX', '/usr/(bin|sbin)/wget'],
+  ] as const)('%s 不允许外层尾部选项', (type, value) => {
+    it.each(['noResolve', 'matchSource', 'legacyOptions'] as const)('拒绝通过 %s 追加外层参数', (field) => {
+      const config = configWithRule(type, value)
+      if (field === 'legacyOptions') config.rules[0].legacyOptions = ['src']
+      else config.rules[0][field] = true
+      const validation = validateRoutingConfig(config)
+      expect(validation.valid).toBe(false)
+      expect(validation.errors).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'RULE_OPTIONS_FORBIDDEN', path: 'rules[0]' }),
+      ]))
+    })
+  })
+
+  it.each([
+    'mixed-port: 7890\n',
+    'sub-rules:\n  child: []\n',
+    'sub-rules:\n  child: MATCH,DIRECT\n',
+    'sub-rules:\n  child: [null]\n',
+  ])('SUB-RULE 拒绝缺失或非有效规则数组的定义 %#', (baseYaml) => {
+    const config = configWithRule('SUB-RULE', '(NETWORK,tcp)')
+    config.baseYaml = baseYaml
+    expect(validateRoutingConfig(config)).toMatchObject({
+      valid: false, errors: [{ code: 'RULE_SUB_RULE_NOT_FOUND', path: 'rules[0].subRuleName' }],
+    })
+  })
+
+  it('SUB-RULE 未选择名称时返回可定位错误', () => {
+    const config = configWithRule('SUB-RULE', '(NETWORK,tcp)')
+    delete config.rules[0].subRuleName
+    expect(validateRoutingConfig(config)).toMatchObject({
+      valid: false, errors: [{ code: 'RULE_SUB_RULE_REQUIRED', path: 'rules[0].subRuleName' }],
+    })
+  })
+
+  it('深度过大的逻辑条件返回明确错误而非栈溢出', () => {
+    let value = '((NETWORK,tcp))'
+    for (let depth = 0; depth < 70; depth++) value = `((NOT,${value}))`
+    expect(getRuleValueError('NOT', value, new Set())).toContain('嵌套不能超过')
+    expect(validateRoutingConfig(configWithRule('NOT', value))).toMatchObject({
+      valid: false, errors: [{ code: 'RULE_VALUE_INVALID', path: 'rules[0].value' }],
     })
   })
 })

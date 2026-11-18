@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import YAML from 'yaml'
 import { app } from '../../src/index'
+import type { RoutingConfig } from '../../src/types/routing'
 import { generatePasswordHash } from '../../src/utils/passwordMgr'
 import { MockKV, createTestEnv } from '../helpers/mockKv'
 
@@ -90,6 +91,89 @@ describe('管理 API 与 KV 行为', () => {
     const stale = await app.request('/api/routing-config/publish', { method: 'POST', headers: authHeaders(env), body: JSON.stringify({ config, baseRevision: 0 }) }, env)
     expect(stale.status).toBe(409)
     expect(JSON.parse(kv.values.get('test-sub:routing:published') || '{}').revision).toBe(1)
+  })
+
+  it('新增 SRC-PORT、正则、逻辑和子规则经草稿与发布后出现在真实订阅端点', async () => {
+    const kv = new MockKV()
+    const env = createTestEnv(kv)
+    // 显式设置空节点池，只验证管理 API 到最终规则输出的链路，不抓取任何外部订阅。
+    kv.values.set(env.TABLENAME, '[]')
+    kv.values.set('test-sub:self-nodes', JSON.stringify({ raw: '[]' }))
+    const config: RoutingConfig = validRoutingConfig()
+    config.baseYaml += 'sub-rules:\n  local:\n    - SRC-PORT,53,DIRECT\n    - MATCH,DIRECT\n'
+    config.rules.unshift(
+      { id: 'port', enabled: true, category: 'general', type: 'SRC-PORT', value: '45000-45999', targetGroupId: 'main', noResolve: false },
+      { id: 'regex', enabled: true, category: 'general', type: 'DOMAIN-REGEX', value: '^a{1,3}\\.example$', targetGroupId: 'main', noResolve: false },
+      { id: 'logic', enabled: true, category: 'general', type: 'AND', value: '((SRC-PORT,80/443),(NETWORK,UDP))', targetGroupId: 'main', noResolve: false },
+      { id: 'sub', enabled: true, category: 'general', type: 'SUB-RULE', value: '(NETWORK,tcp)', subRuleName: 'local', targetGroupId: '', noResolve: false },
+    )
+
+    const draft = await app.request('/api/routing-config/draft', {
+      method: 'PUT', headers: authHeaders(env), body: JSON.stringify({ config, baseRevision: 0 }),
+    }, env)
+    expect(draft.status).toBe(200)
+    expect(JSON.parse(kv.values.get('test-sub:routing:draft') || '{}').config.rules).toEqual(config.rules)
+    expect(kv.values.has('test-sub:routing:published')).toBe(false)
+    expect(kv.deleted).toEqual([])
+
+    const loaded = await app.request('/api/routing-config', { headers: authHeaders(env) }, env)
+    expect(loaded.status).toBe(200)
+    expect(((await loaded.json()) as { data: { config: RoutingConfig } }).data.config).toEqual(config)
+
+    const published = await app.request('/api/routing-config/publish', {
+      method: 'POST', headers: authHeaders(env), body: JSON.stringify({ config, baseRevision: 0 }),
+    }, env)
+    expect(published.status).toBe(200)
+    expect(JSON.parse(kv.values.get('test-sub:routing:published') || '{}')).toMatchObject({ revision: 1, config })
+    expect(kv.deleted).toEqual(expect.arrayContaining(['test-sub:1:cacheObj:包年/包月', 'test-sub:1:cacheObj:流量包']))
+
+    for (const endpoint of ['/subscribe/magic-key', '/onetime/magic-key']) {
+      for (const userAgent of ['Clash.Meta', 'Stash/2.6']) {
+        const response = await app.request(endpoint, { headers: { 'User-Agent': userAgent } }, env)
+        expect(response.status).toBe(200)
+        const document = YAML.parse(await response.text())
+        expect(document.rules).toEqual([
+          'SRC-PORT,45000-45999,节点选择',
+          'DOMAIN-REGEX,^a{1,3}\\.example$,节点选择',
+          'AND,((SRC-PORT,80/443),(NETWORK,UDP)),节点选择',
+          'SUB-RULE,(NETWORK,tcp),local',
+          'MATCH,节点选择',
+        ])
+        expect(document['sub-rules']).toEqual({ local: ['SRC-PORT,53,DIRECT', 'MATCH,DIRECT'] })
+      }
+    }
+  })
+
+  it('非法 SRC-PORT 可以暂存草稿，但发布被阻止且上一版订阅继续生效', async () => {
+    const kv = new MockKV()
+    const env = createTestEnv(kv)
+    kv.values.set(env.TABLENAME, '[]')
+    kv.values.set('test-sub:self-nodes', JSON.stringify({ raw: '[]' }))
+    const config: RoutingConfig = validRoutingConfig()
+    const firstPublish = await app.request('/api/routing-config/publish', {
+      method: 'POST', headers: authHeaders(env), body: JSON.stringify({ config, baseRevision: 0 }),
+    }, env)
+    expect(firstPublish.status).toBe(200)
+    const previousPublished = kv.values.get('test-sub:routing:published')
+    const clearedBefore = [...kv.deleted]
+    config.rules.unshift({
+      id: 'invalid-port', enabled: true, category: 'general', type: 'SRC-PORT', value: '70000', targetGroupId: 'main', noResolve: false,
+    })
+    const draft = await app.request('/api/routing-config/draft', {
+      method: 'PUT', headers: authHeaders(env), body: JSON.stringify({ config, baseRevision: 1 }),
+    }, env)
+    expect(draft.status).toBe(200)
+
+    const rejected = await app.request('/api/routing-config/publish', {
+      method: 'POST', headers: authHeaders(env), body: JSON.stringify({ config, baseRevision: 1 }),
+    }, env)
+    expect(rejected.status).toBe(422)
+    expect(await rejected.json()).toMatchObject({ errors: [{ code: 'RULE_VALUE_INVALID', path: 'rules[0].value' }] })
+    expect(kv.values.get('test-sub:routing:published')).toBe(previousPublished)
+    expect(kv.deleted).toEqual(clearedBefore)
+    const subscription = await app.request('/subscribe/magic-key', { headers: { 'User-Agent': 'Clash.Meta' } }, env)
+    expect(subscription.status).toBe(200)
+    expect(YAML.parse(await subscription.text()).rules).toEqual(['MATCH,节点选择'])
   })
 
   it('输出信息使用当前域名、MAGIC 和真实订阅源数量', async () => {

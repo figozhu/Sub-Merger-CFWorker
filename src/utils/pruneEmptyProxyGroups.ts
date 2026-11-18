@@ -1,4 +1,5 @@
 import YAML, { isMap, isScalar, isSeq } from 'yaml'
+import { parseRoutingRule } from './routingRuleSyntax'
 
 /** Clash 内置策略不依赖订阅节点，裁剪时必须保留。 */
 const BUILTIN_TARGETS = new Set(['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'COMPATIBLE', 'GLOBAL'])
@@ -51,21 +52,9 @@ export function pruneEmptyProxyGroups(groups: Record<string, unknown>[], nodeNam
  * @returns 策略字段在原文本中的区间；无法识别或无需处理时返回 null。
  */
 function findRuleTarget(text: string): { start: number; end: number; name: string; isMatch: boolean } | null {
-  const separators: number[] = []
-  let depth = 0
-  for (let index = 0; index < text.length; index++) {
-    if (text[index] === '(') depth++
-    else if (text[index] === ')') depth--
-    else if (text[index] === ',' && depth === 0) separators.push(index)
-  }
-  const type = text.slice(0, separators[0]).trim().toUpperCase()
-  if (type === 'SUB-RULE') return null
-  const isMatch = type === 'MATCH' || type === 'FINAL'
-  const field = isMatch ? 0 : 1
-  if (separators[field] === undefined) return null
-  const start = separators[field] + 1
-  const end = separators[field + 1] ?? text.length
-  return { start, end, name: text.slice(start, end).trim(), isMatch }
+  const parsed = parseRoutingRule(text)
+  if (!parsed || parsed.type === 'SUB-RULE') return null
+  return { start: parsed.targetStart, end: parsed.targetEnd, name: parsed.target, isMatch: parsed.type === 'MATCH' || parsed.type === 'FINAL' }
 }
 
 /**

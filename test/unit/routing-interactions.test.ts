@@ -49,6 +49,7 @@ async function openRouting(config = makeConfig()) {
     '/api/subscriptions': { subscriptions: [] },
     '/api/self-nodes': { raw: '[]' },
     '/api/routing-config': { config, revision: 1, migrated: false },
+    '/api/routing-config/draft': { revision: 1 },
     '/api/outputs': { outputs: [] },
     '/api/subscriptions/settings': { userAgent: '', defaultUserAgent: 'Clash.Meta' },
   }
@@ -116,6 +117,73 @@ afterEach(() => {
 })
 
 describe('路由规则真实 DOM 交互回归', () => {
+  it('下拉框包含官方全部 37 类，SRC-PORT 输入范围后保存的类型与内容不变', async () => {
+    const ui = await openRouting()
+    const selector = '[data-rule-id="rule-0"] [data-rule-field="type"]'
+    const types = Array.from(ui.element<HTMLSelectElement>(selector).options).map((option) => option.value)
+    expect(types).toEqual([
+      'DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'DOMAIN-WILDCARD', 'DOMAIN-REGEX', 'GEOSITE',
+      'IP-CIDR', 'IP-CIDR6', 'IP-SUFFIX', 'IP-ASN', 'GEOIP', 'SRC-GEOIP', 'SRC-IP-ASN', 'SRC-IP-CIDR', 'SRC-IP-SUFFIX',
+      'DST-PORT', 'SRC-PORT', 'IN-PORT', 'IN-TYPE', 'IN-USER', 'IN-NAME', 'REMATCH-NAME',
+      'PROCESS-PATH', 'PROCESS-PATH-WILDCARD', 'PROCESS-PATH-REGEX', 'PROCESS-NAME', 'PROCESS-NAME-WILDCARD', 'PROCESS-NAME-REGEX',
+      'UID', 'NETWORK', 'DSCP', 'RULE-SET', 'AND', 'OR', 'NOT', 'SUB-RULE', 'MATCH',
+    ])
+    ui.edit(selector, 'SRC-PORT', 'change')
+    expect(ui.element<HTMLInputElement>('[data-rule-id="rule-0"] [data-rule-field="value"]').placeholder).toContain('45000-45999')
+    ui.edit('[data-rule-id="rule-0"] [data-rule-field="value"]', '45000-45999')
+    ui.click('[data-action="save-routing"]')
+    await vi.waitFor(() => expect(ui.document.querySelector('.toast')?.textContent).toContain('已保存'))
+    const saved = vi.mocked(ui.dom.window.fetch).mock.calls.find(([url]) => url === '/api/routing-config/draft')!
+    expect(JSON.parse(String(saved[1]?.body)).config.rules[0]).toMatchObject({ type: 'SRC-PORT', value: '45000-45999', targetGroupId: 'main' })
+  })
+
+  it('切换 SUB-RULE 后记录仍可见，保存独立子规则名称，切回普通规则恢复目标控件', async () => {
+    const ui = await openRouting()
+    const row = '[data-rule-id="rule-0"]'
+    ui.edit(row + ' [data-rule-field="type"]', 'SUB-RULE', 'change')
+    expect(ui.ids()).toContain('rule-0')
+    expect(ui.selected().getAttribute('data-rule-id')).toBe('rule-0')
+    expect(ui.document.querySelector(row + ' [data-rule-field="targetGroupId"]')).toBeNull()
+    ui.edit(row + ' [data-rule-field="value"]', '(NETWORK,tcp)')
+    ui.edit(row + ' [data-rule-field="subRuleName"]', '来源分流')
+    ui.click('[data-action="save-routing"]')
+    await vi.waitFor(() => expect(ui.document.querySelector('.toast')?.textContent).toContain('已保存'))
+    const saved = vi.mocked(ui.dom.window.fetch).mock.calls.find(([url]) => url === '/api/routing-config/draft')!
+    expect(JSON.parse(String(saved[1]?.body)).config.rules[0]).toMatchObject({ type: 'SUB-RULE', value: '(NETWORK,tcp)', subRuleName: '来源分流', targetGroupId: '' })
+    ui.edit(row + ' [data-rule-field="type"]', 'DOMAIN', 'change')
+    expect(ui.document.querySelector(row + ' [data-rule-field="subRuleName"]')).toBeNull()
+    expect(ui.element<HTMLSelectElement>(row + ' [data-rule-field="targetGroupId"]').value).toBe('builtin:DIRECT')
+  })
+
+  it('旧 src 选项可取消，切换到正则时清除会被误读为目标的外层参数', async () => {
+    const ui = await openRouting(makeConfig([
+      makeRule('ip', 'main', { type: 'IP-CIDR', value: '10.0.0.0/8', noResolve: true, legacyOptions: ['src'] }),
+      makeRule('match', 'main', { type: 'MATCH', value: undefined }),
+    ]))
+    const row = '[data-rule-id="ip"]'
+    expect(ui.element<HTMLInputElement>(row + ' [data-rule-field="matchSource"]').checked).toBe(true)
+    ui.click(row + ' [data-rule-field="matchSource"]')
+    ui.click('[data-action="save-routing"]')
+    await vi.waitFor(() => expect(ui.document.querySelector('.toast')?.textContent).toContain('已保存'))
+    let saved = vi.mocked(ui.dom.window.fetch).mock.calls.filter(([url]) => url === '/api/routing-config/draft').at(-1)!
+    expect(JSON.parse(String(saved[1]?.body)).config.rules[0]).toMatchObject({ matchSource: false, legacyOptions: [] })
+
+    ui.edit(row + ' [data-rule-field="type"]', 'DOMAIN-REGEX', 'change')
+    const noResolve = ui.element<HTMLInputElement>(row + ' [data-rule-field="noResolve"]')
+    expect(noResolve.disabled).toBe(true)
+    expect(noResolve.checked).toBe(false)
+    expect(ui.document.querySelector(row + ' [data-rule-field="matchSource"]')).toBeNull()
+    ui.edit(row + ' [data-rule-field="value"]', '^a{1,3}$')
+    ui.click('[data-action="save-routing"]')
+    await vi.waitFor(() => expect(vi.mocked(ui.dom.window.fetch).mock.calls.filter(([url]) => url === '/api/routing-config/draft')).toHaveLength(2))
+    await vi.waitFor(() => expect(ui.element('[data-action="save-routing"]').hasAttribute('aria-busy')).toBe(false))
+    saved = vi.mocked(ui.dom.window.fetch).mock.calls.filter(([url]) => url === '/api/routing-config/draft').at(-1)!
+    const rule = JSON.parse(String(saved[1]?.body)).config.rules[0]
+    expect(rule).toMatchObject({ type: 'DOMAIN-REGEX', value: '^a{1,3}$', noResolve: false })
+    expect(rule).not.toHaveProperty('legacyOptions')
+    expect(rule).not.toHaveProperty('matchSource')
+  })
+
   it('选择长列表中部规则时保留三个滚动区域和规则按钮焦点', async () => {
     const ui = await openRouting()
     const positions = [['#group-pane-panel', 960], ['.unified-group-list .entity-list', 170], ['#routing-tab-panel', 320]] as const

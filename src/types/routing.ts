@@ -116,17 +116,8 @@ export interface RuleProviderConfig {
   interval: number
 }
 
-/** 首期可视化编辑器支持的路由规则类型。 */
-export type RoutingRuleType =
-  | 'DOMAIN'
-  | 'DOMAIN-SUFFIX'
-  | 'DOMAIN-KEYWORD'
-  | 'IP-CIDR'
-  | 'RULE-SET'
-  | 'PROCESS-NAME'
-  | 'PROCESS-NAME-WILDCARD'
-  | 'GEOIP'
-  | 'MATCH'
+/** 与界面、导入和服务端校验共享的 Mihomo 路由规则类型。 */
+export type RoutingRuleType = (typeof import('../config/routingRuleTypes').ROUTING_RULE_DEFINITIONS)[number]['type']
 
 /** 兼容旧配置中直接作为规则目标使用的 Clash 内置策略。 */
 export type BuiltinRuleTarget = 'builtin:DIRECT' | 'builtin:REJECT'
@@ -151,9 +142,13 @@ export interface RoutingRuleConfig {
   value?: string
   /** RULE-SET 对应规则提供者的稳定 ID。 */
   providerId?: string
+  /** SUB-RULE 引用基础 YAML 中的 sub-rules 名称，不属于代理策略目标。 */
+  subRuleName?: string
   /** 策略组稳定 ID、内置目标，或迁移时原样保留的直接节点目标。 */
   targetGroupId: string | BuiltinRuleTarget | LegacyRuleTarget
   noResolve: boolean
+  /** 目标 IP 规则的 src 参数；省略等价于 false，兼容旧版 KV 配置。 */
+  matchSource?: boolean
   /** 迁移旧配置时保留无法归一化但必须语义兼容的尾部选项。 */
   legacyOptions?: string[]
 }

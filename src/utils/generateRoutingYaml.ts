@@ -36,11 +36,12 @@ function generateRules(config: RoutingConfig): Array<{ text: string; remark: str
   const providerNames = new Map(config.providers.filter((provider) => provider.enabled).map((provider) => [provider.id, provider.name]))
 
   return config.rules.filter((rule) => rule.enabled).map((rule) => {
-    const target = resolveRuleTarget(rule.targetGroupId, groupNames)
+    const target = rule.type === 'SUB-RULE' ? (rule.subRuleName ?? '') : resolveRuleTarget(rule.targetGroupId, groupNames)
     const parts = rule.type === 'MATCH'
       ? ['MATCH', target]
       : [rule.type, rule.type === 'RULE-SET' ? (providerNames.get(rule.providerId ?? '') ?? rule.value ?? '') : (rule.value ?? ''), target]
     if (rule.noResolve) parts.push('no-resolve')
+    if (rule.matchSource && !rule.legacyOptions?.includes('src')) parts.push('src')
     if (Array.isArray(rule.legacyOptions)) parts.push(...rule.legacyOptions)
     return { text: parts.join(','), remark: typeof rule.remark === 'string' ? rule.remark : '' }
   })

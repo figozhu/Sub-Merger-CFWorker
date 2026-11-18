@@ -8,6 +8,8 @@ import type {
   RuleProviderConfig,
 } from '../types/routing'
 import { createLegacyRuleTarget } from '../utils/routingRuleTarget'
+import { SUPPORTED_RULE_TYPES } from './routingRuleTypes'
+import { parseRoutingRule } from '../utils/routingRuleSyntax'
 
 /** 旧版两套环境正则中迁移会读取的字段。 */
 export type LegacyPatternConfig = Record<string, string | undefined>
@@ -33,17 +35,6 @@ export interface RoutingImportResult {
 }
 
 const SUPPORTED_GROUP_TYPES = new Set(['select', 'url-test', 'fallback', 'load-balance'])
-const SUPPORTED_RULE_TYPES = new Set([
-  'DOMAIN',
-  'DOMAIN-SUFFIX',
-  'DOMAIN-KEYWORD',
-  'IP-CIDR',
-  'RULE-SET',
-  'PROCESS-NAME',
-  'PROCESS-NAME-WILDCARD',
-  'GEOIP',
-  'MATCH',
-])
 const SUPPORTED_GROUP_FIELDS = new Set(['name', 'type', 'proxies', 'url', 'interval', 'tolerance', 'strategy'])
 const SUPPORTED_PROVIDER_FIELDS = new Set(['type', 'behavior', 'url', 'path', 'interval'])
 const UNSUPPORTED_GROUP_BUILTINS = new Set(['REJECT', 'REJECT-DROP', 'PASS', 'COMPATIBLE'])
@@ -348,22 +339,25 @@ function importRule(
     errors.push({ code: 'RULE_INVALID', path: `rules[${index}]`, message: '规则必须是逗号分隔的字符串' })
     return null
   }
-  const parts = raw.split(',').map((part) => part.trim())
-  const type = parts[0]
+  const type = raw.split(',', 1)[0].trim().toUpperCase()
   if (!SUPPORTED_RULE_TYPES.has(type)) {
     errors.push({ code: 'RULE_TYPE_UNSUPPORTED', path: `rules[${index}]`, message: `不支持的规则类型：${type || '空'}` })
     return null
   }
 
-  const isMatch = type === 'MATCH'
-  const value = isMatch ? undefined : parts[1]
-  const targetName = isMatch ? parts[1] : parts[2]
+  const parsed = parseRoutingRule(raw)
+  if (!parsed || !parsed.target) {
+    errors.push({ code: 'RULE_TARGET_REQUIRED', path: `rules[${index}]`, message: '规则缺少匹配内容或目标字段' })
+    return null
+  }
+  const { value, target: targetName, options } = parsed
+  const isSubRule = type === 'SUB-RULE'
   // Clash 允许规则直接指向代理节点。旧版没有单独的数据模型表示这种目标，
   // 因此用兼容前缀原样保留名称，生成 YAML 时再还原，避免迁移擅自改变路由语义。
-  const targetGroupId = (groupIds.get(targetName)
+  const targetGroupId = isSubRule ? '' : (groupIds.get(targetName)
     ?? (['DIRECT', 'REJECT'].includes(targetName) ? `builtin:${targetName}` : ''))
     || (targetName ? createLegacyRuleTarget(targetName) : '')
-  if (!targetGroupId) {
+  if (!isSubRule && !targetGroupId) {
     errors.push({ code: 'RULE_TARGET_REQUIRED', path: `rules[${index}]`, message: '规则缺少目标策略、策略组或节点名称' })
   }
 
@@ -381,8 +375,10 @@ function importRule(
     value,
     providerId,
     targetGroupId,
-    noResolve: parts.slice(isMatch ? 2 : 3).includes('no-resolve'),
-    legacyOptions: parts.slice(isMatch ? 2 : 3).filter((option) => option !== 'no-resolve'),
+    ...(isSubRule ? { subRuleName: targetName } : {}),
+    noResolve: options.includes('no-resolve'),
+    ...(options.includes('src') ? { matchSource: true } : {}),
+    legacyOptions: options.filter((option) => option !== 'no-resolve' && option !== 'src'),
   }
 }
 

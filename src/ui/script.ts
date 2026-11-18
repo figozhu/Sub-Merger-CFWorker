@@ -1,3 +1,5 @@
+import { COMMA_PAYLOAD_RULE_TYPES, ROUTING_RULE_DEFINITIONS } from '../config/routingRuleTypes'
+
 /**
  * 新版控制台的轻量浏览器脚本。
  * 使用事件委托和原生 DOM API 实现完整交互，不引入 React、Babel 或 CDN 运行时。
@@ -8,6 +10,9 @@ export const consoleClientScript = String.raw`
 
   const VALID_NAVS = ['subscriptions', 'nodes', 'routing', 'links', 'logs'];
   const MANAGED_YAML_KEYS = ['proxies', 'proxy-groups', 'rule-providers', 'rules'];
+  /** 与服务端共享规则目录，避免 UI、类型和导入器各自维护白名单。 */
+  const RULE_DEFINITIONS = ${JSON.stringify(ROUTING_RULE_DEFINITIONS)};
+  const COMMA_PAYLOAD_RULE_TYPES = new Set(${JSON.stringify([...COMMA_PAYLOAD_RULE_TYPES])});
   /** 仅供 UI 使用的虚拟分组 ID，不会写入路由配置或生成到 Clash YAML。 */
   const UNASSIGNED_RULES_GROUP_ID = '__ui_unassigned_rules__';
   const workspace = document.getElementById('workspace');
@@ -438,8 +443,11 @@ export const consoleClientScript = String.raw`
    * @returns {string} option HTML。
    */
   function ruleTypeOptions(selected) {
-    return ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'RULE-SET', 'PROCESS-NAME', 'PROCESS-NAME-WILDCARD', 'GEOIP', 'MATCH'].map(function (type) {
-      return '<option value="' + type + '"' + (selected === type ? ' selected' : '') + '>' + type + '</option>';
+    const categories = Array.from(new Set(RULE_DEFINITIONS.map(function (definition) { return definition.category; })));
+    return categories.map(function (category) {
+      return '<optgroup label="' + escapeHtml(category) + '">' + RULE_DEFINITIONS.filter(function (definition) { return definition.category === category; }).map(function (definition) {
+        return '<option value="' + definition.type + '" title="' + escapeHtml(definition.label) + '"' + (selected === definition.type ? ' selected' : '') + '>' + definition.type + '</option>';
+      }).join('') + '</optgroup>';
     }).join('');
   }
 
@@ -518,22 +526,32 @@ export const consoleClientScript = String.raw`
     const nextScopeRule = selectedScopeIndex >= 0 ? scopedRules[selectedScopeIndex + 1] : null;
     const rows = visibleRules.map(function (rule) {
       const index = rules.findIndex(function (item) { return item.id === rule.id; });
+      const definition = RULE_DEFINITIONS.find(function (item) { return item.type === rule.type; }) || {};
+      const isSubRule = rule.type === 'SUB-RULE';
+      const optionsForbidden = rule.type === 'MATCH' || COMMA_PAYLOAD_RULE_TYPES.has(rule.type);
       const valueControl = rule.type === 'MATCH'
         ? '<div class="nested-rule-placeholder">最终兜底，无需匹配内容</div>'
         : rule.type === 'RULE-SET'
           ? '<select class="nested-rule-value" data-rule-field="providerId" data-rule-index="' + index + '" aria-label="规则提供者">' + providerOptions(rule.providerId) + '</select>'
-          : '<input class="nested-rule-value" data-rule-field="value" data-rule-index="' + index + '" value="' + escapeHtml(rule.value || '') + '" aria-label="匹配内容">';
-      const showTargetControl = state.groupRuleScope === 'global' || isFallbackGroup;
-      const targetControl = showTargetControl
+          : '<input class="nested-rule-value" data-rule-field="value" data-rule-index="' + index + '" value="' + escapeHtml(rule.value || '') + '" placeholder="' + escapeHtml(definition.example || '') + '" title="' + escapeHtml(definition.label || '') + '" aria-label="匹配内容">';
+      const showTargetControl = isSubRule || state.groupRuleScope === 'global' || isFallbackGroup;
+      const targetControl = isSubRule
+        ? '<input class="nested-rule-target" data-rule-field="subRuleName" data-rule-index="' + index + '" value="' + escapeHtml(rule.subRuleName || '') + '" placeholder="子规则名称" title="填写 YAML 模板中 sub-rules 下的名称" aria-label="子规则名称">'
+        : showTargetControl
         ? '<select class="nested-rule-target" data-rule-field="targetGroupId" data-rule-index="' + index + '" aria-label="目标策略">' + groupOptions(rule.targetGroupId, '') + '</select>'
         : '';
+      const sourceOption = definition.destinationIp
+        ? '<label class="nested-rule-option" title="改为匹配来源 IP，并跳过 DNS 解析"><input type="checkbox" data-rule-field="matchSource" data-rule-index="' + index + '"' + (rule.matchSource || (rule.legacyOptions || []).includes('src') ? ' checked' : '') + '><span>src</span></label>' : '';
+      const syntaxHint = isSubRule ? '子规则内容请在 YAML 模板的 sub-rules 中配置。'
+        : ['AND', 'OR', 'NOT'].includes(rule.type) ? '填写完整括号表达式；RULE-SET 条件引用规则集名称。' : '';
       return '<article data-rule-id="' + escapeHtml(rule.id) + '" class="nested-rule-record ' + (state.selectedRuleId === rule.id ? 'selected ' : '') + (!rule.enabled ? 'disabled' : '') + '"><div class="nested-rule-primary ' + (showTargetControl ? 'with-target' : '') + '">'
         + '<button class="rule-order-button" data-action="select-rule" data-id="' + escapeHtml(rule.id) + '" aria-label="选择第 ' + (index + 1) + ' 条规则">#' + String(index + 1).padStart(2, '0') + '</button>'
         + '<label class="nested-rule-enable" title="启用规则"><input type="checkbox" data-rule-field="enabled" data-rule-index="' + index + '"' + (rule.enabled ? ' checked' : '') + ' aria-label="启用规则"></label>'
         + '<select class="nested-rule-type" data-rule-field="type" data-rule-index="' + index + '" aria-label="规则类型">' + ruleTypeOptions(rule.type) + '</select>'
         + valueControl + targetControl
         + '<button class="rule-copy-button" data-action="duplicate-rule" data-id="' + escapeHtml(rule.id) + '" aria-label="复制规则"' + (rule.type === 'MATCH' ? ' disabled' : '') + '>复制</button></div>'
-        + '<div class="nested-rule-secondary"><input data-rule-field="remark" data-rule-index="' + index + '" value="' + escapeHtml(rule.remark || '') + '" placeholder="备注：导出为规则上方注释" aria-label="规则备注"><input data-rule-field="category" data-rule-index="' + index + '" value="' + escapeHtml(rule.category || 'general') + '" aria-label="规则分类"><label class="nested-rule-option"><input type="checkbox" data-rule-field="noResolve" data-rule-index="' + index + '"' + (rule.noResolve ? ' checked' : '') + (rule.type === 'MATCH' ? ' disabled' : '') + '><span>no-resolve</span></label></div></article>';
+        + '<div class="nested-rule-secondary"><input data-rule-field="remark" data-rule-index="' + index + '" value="' + escapeHtml(rule.remark || '') + '" placeholder="备注：导出为规则上方注释" aria-label="规则备注"><input data-rule-field="category" data-rule-index="' + index + '" value="' + escapeHtml(rule.category || 'general') + '" aria-label="规则分类"><div class="nested-rule-options"><label class="nested-rule-option"><input type="checkbox" data-rule-field="noResolve" data-rule-index="' + index + '"' + (rule.noResolve ? ' checked' : '') + (optionsForbidden ? ' disabled' : '') + '><span>no-resolve</span></label>' + sourceOption + '</div>'
+        + (syntaxHint ? '<small class="nested-rule-hint">' + syntaxHint + '</small>' : '') + '</div></article>';
     }).join('');
     const selectedToolbar = selectedVisible
       ? '<div class="selected-rule-toolbar" role="toolbar" aria-label="选中规则操作"><div><span>已选</span><strong>#' + String(selectedGlobalIndex + 1).padStart(2, '0') + ' · ' + escapeHtml(selectedRule.type) + '</strong></div><div class="selected-rule-actions">'
@@ -545,12 +563,12 @@ export const consoleClientScript = String.raw`
     const empty = keyword
       ? '<div class="empty-rule-group"><strong>没有匹配的规则</strong><span>清除搜索条件后再试。</span></div>'
       : isFallbackGroup
-        ? '<div class="empty-rule-group"><strong>暂无未归组规则</strong><span>直接指向节点、DIRECT 或 REJECT 的规则会显示在这里。</span></div>'
+        ? '<div class="empty-rule-group"><strong>暂无未归组规则</strong><span>子规则跳转及直接指向节点、DIRECT 或 REJECT 的规则会显示在这里。</span></div>'
         : '<button class="empty-rule-group" data-action="add-rule"><strong>这个策略组还没有分流规则</strong><span>添加第一条规则，目标将自动设置为当前策略组。</span></button>';
     const description = state.groupRuleScope === 'global'
       ? '规则按从上到下的顺序匹配。'
       : isFallbackGroup
-        ? '直接指向 DIRECT、REJECT 或节点的规则，可在此调整目标。'
+        ? '子规则跳转及直接指向 DIRECT、REJECT 或节点的规则，可在此调整目标。'
         : '';
     const addButton = isFallbackGroup ? '' : '<button class="button primary small" data-action="add-rule">添加规则</button>';
     const localScopeLabel = isFallbackGroup ? '未归组规则' : '当前策略组';
@@ -1048,7 +1066,7 @@ export const consoleClientScript = String.raw`
     const anchor = rules[anchorIndex];
     const targetGroupId = state.groupRuleScope === 'group' && state.selectedGroupId !== UNASSIGNED_RULES_GROUP_ID
       ? state.selectedGroupId
-      : anchor.targetGroupId;
+      : anchor.targetGroupId || 'builtin:DIRECT';
     const rule = createDefaultRoutingRule(targetGroupId, anchor.category || 'general');
     const requestedIndex = anchor.type === 'MATCH' ? anchorIndex : anchorIndex + (position === 'below' ? 1 : 0);
     const insertIndex = routingInsertIndex(requestedIndex);
@@ -1445,6 +1463,8 @@ export const consoleClientScript = String.raw`
     if (state.routing && ruleField) {
       const rule = state.routing.config.rules[Number(target.getAttribute('data-rule-index'))];
       if (rule) rule[ruleField] = target.type === 'checkbox' ? target.checked : target.value;
+      // 老配置的 src 保存在 legacyOptions；编辑复选框时统一到新字段，防止取消后仍被输出。
+      if (rule && ruleField === 'matchSource' && Array.isArray(rule.legacyOptions)) rule.legacyOptions = rule.legacyOptions.filter(function (option) { return option !== 'src'; });
       return;
     }
     const providerField = target.getAttribute('data-provider-field');
@@ -1500,6 +1520,25 @@ export const consoleClientScript = String.raw`
       if (rule.type === 'MATCH') { rule.value = ''; delete rule.providerId; rule.noResolve = false; }
       else if (rule.type === 'RULE-SET') { rule.providerId = state.routing.config.providers[0] ? state.routing.config.providers[0].id : ''; rule.value = ''; }
       else { delete rule.providerId; rule.value = rule.value || ''; }
+      const definition = RULE_DEFINITIONS.find(function (item) { return item.type === rule.type; });
+      if (!definition || !definition.destinationIp) {
+        delete rule.matchSource;
+        if (Array.isArray(rule.legacyOptions)) rule.legacyOptions = rule.legacyOptions.filter(function (option) { return option !== 'src'; });
+      }
+      if (rule.type === 'MATCH' || COMMA_PAYLOAD_RULE_TYPES.has(rule.type)) {
+        rule.noResolve = false;
+        delete rule.legacyOptions;
+      }
+      if (rule.type === 'SUB-RULE') {
+        rule.targetGroupId = '';
+        rule.subRuleName = rule.subRuleName || '';
+        state.selectedRuleId = rule.id;
+        // 子规则跳转不属于任何策略组，切至全局顺序，保证切换类型后当前记录仍可编辑。
+        state.groupRuleScope = 'global';
+      } else {
+        delete rule.subRuleName;
+        if (!rule.targetGroupId) rule.targetGroupId = 'builtin:DIRECT';
+      }
       render();
     }
     if (ruleField === 'targetGroupId') {

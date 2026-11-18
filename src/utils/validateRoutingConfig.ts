@@ -7,6 +7,8 @@ import type {
   RoutingValidationResult,
 } from '../types/routing'
 import { getLegacyRuleTargetName, LEGACY_RULE_TARGET_PREFIX } from './routingRuleTarget'
+import { COMMA_PAYLOAD_RULE_TYPES, DESTINATION_IP_RULE_TYPES, SUPPORTED_RULE_TYPES } from '../config/routingRuleTypes'
+import { getRuleValueError } from './routingRuleSyntax'
 
 /** YAML 模板中由订阅合并器或路由配置独占管理的顶级字段。 */
 const MANAGED_YAML_FIELDS = new Set(['proxies', 'proxy-groups', 'rule-providers', 'rules'])
@@ -25,23 +27,7 @@ const SUPPORTED_OUTPUT_SCOPES = new Set(['all', 'monthly', 'trafficPackage'])
 const SUPPORTED_GROUP_VISIBILITIES = new Set(['always', 'withSelfNodes'])
 const SUPPORTED_MEMBER_CONDITIONS = new Set(['always', 'withSelfNodes', 'withoutSelfNodes'])
 const SUPPORTED_PROVIDER_BEHAVIORS = new Set(['classical', 'domain', 'ipcidr'])
-const SUPPORTED_RULE_TYPES = new Set([
-  'DOMAIN',
-  'DOMAIN-SUFFIX',
-  'DOMAIN-KEYWORD',
-  'IP-CIDR',
-  'RULE-SET',
-  'PROCESS-NAME',
-  'PROCESS-NAME-WILDCARD',
-  'GEOIP',
-  'MATCH',
-])
 const SUPPORTED_BUILTIN_TARGETS = new Set(['builtin:DIRECT', 'builtin:REJECT'])
-
-/** 只检查域名或进程、不依赖目标 IP 的规则类型；no-resolve 对这些条件没有作用。 */
-const RULE_TYPES_WITHOUT_DESTINATION_IP = new Set([
-  'DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'PROCESS-NAME', 'PROCESS-NAME-WILDCARD',
-])
 
 type UnknownRecord = Record<string, unknown>
 
@@ -579,12 +565,13 @@ function validateProviders(
  *
  * 为兼容旧配置，规则目标除启用策略组 ID 外还允许内置目标和直接节点名称。
  * 直接节点名称无法在静态配置校验阶段确认是否仍存在，因此作为提醒返回但不阻断迁移；
- * no-resolve 在旧配置的多种非 MATCH 规则上均有使用，因此仅禁止 MATCH 携带该选项；
+ * 保留旧普通规则的 no-resolve；MATCH 及以末字段为目标的逻辑/正则规则禁止外层参数；
  * 对不依赖目标 IP 的组合及 CN/LAN 的解析行为只提醒，不改写配置或阻断旧配置迁移。
  *
  * @param rules 原始 rules 值。
  * @param enabledGroupsById 启用策略组 ID 映射。
  * @param enabledProvidersById 启用规则提供者 ID 映射。
+ * @param subRules 基础 YAML 中声明的子规则名称及内容。
  * @param errors 收集阻断发布的问题。
  * @param warnings 收集需要管理员确认但不阻断发布的兼容问题。
  */
@@ -592,6 +579,7 @@ function validateRules(
   rules: unknown,
   enabledGroupsById: Map<string, UnknownRecord>,
   enabledProvidersById: Map<string, UnknownRecord>,
+  subRules: UnknownRecord,
   errors: RoutingValidationIssue[],
   warnings: RoutingValidationIssue[],
 ): void {
@@ -603,6 +591,7 @@ function validateRules(
   const allIds = new Set<string>()
   const enabledRuleIndexes: number[] = []
   const enabledMatchIndexes: number[] = []
+  const providerNames = new Set([...enabledProvidersById.values()].map((provider) => String(provider.name)))
 
   rules.forEach((rule, ruleIndex) => {
     const rulePath = `rules[${ruleIndex}]`
@@ -643,6 +632,12 @@ function validateRules(
     if (typeof rule.noResolve !== 'boolean') {
       addIssue(errors, 'RULE_NO_RESOLVE_INVALID', `${rulePath}.noResolve`, 'noResolve 必须是布尔值')
     }
+    if (rule.matchSource !== undefined && typeof rule.matchSource !== 'boolean') {
+      addIssue(errors, 'RULE_MATCH_SOURCE_INVALID', `${rulePath}.matchSource`, 'matchSource 必须是布尔值')
+    }
+    if (rule.subRuleName !== undefined && typeof rule.subRuleName !== 'string') {
+      addIssue(errors, 'RULE_SUB_RULE_NAME_INVALID', `${rulePath}.subRuleName`, '子规则名称必须是字符串')
+    }
     if (rule.legacyOptions !== undefined && (!Array.isArray(rule.legacyOptions) || rule.legacyOptions.some((option) => typeof option !== 'string'))) {
       addIssue(errors, 'RULE_LEGACY_OPTIONS_INVALID', `${rulePath}.legacyOptions`, '迁移保留选项必须是字符串数组')
     }
@@ -653,13 +648,21 @@ function validateRules(
     if (rule.type === 'MATCH') enabledMatchIndexes.push(ruleIndex)
     if (!SUPPORTED_RULE_TYPES.has(String(rule.type))) return
 
-    if (rule.noResolve === true) {
+    const legacyOptions = Array.isArray(rule.legacyOptions) ? rule.legacyOptions : []
+    if (COMMA_PAYLOAD_RULE_TYPES.has(String(rule.type)) && (rule.noResolve || rule.matchSource || legacyOptions.length)) {
+      addIssue(errors, 'RULE_OPTIONS_FORBIDDEN', rulePath, `${String(rule.type)} 不能追加外层参数；逻辑规则的 no-resolve/src 应写在内部 IP 条件中`)
+    }
+    if ((rule.matchSource || legacyOptions.includes('src')) && !DESTINATION_IP_RULE_TYPES.has(String(rule.type))) {
+      addIssue(errors, 'RULE_SRC_UNSUPPORTED', `${rulePath}.matchSource`, 'src 仅支持目标 IP 规则和 RULE-SET')
+    }
+
+    if (rule.noResolve === true && rule.type !== 'MATCH') {
       const provider = rule.type === 'RULE-SET' && isNonEmptyString(rule.providerId)
         ? enabledProvidersById.get(rule.providerId)
         : undefined
       // classical 规则集可随上游更新加入 IP/ASN 条件，静态校验不猜测其内容。
-      if (RULE_TYPES_WITHOUT_DESTINATION_IP.has(String(rule.type)) || provider?.behavior === 'domain') {
-        addIssue(warnings, 'RULE_NO_RESOLVE_INEFFECTIVE', `${rulePath}.noResolve`, '当前规则仅匹配域名或进程，no-resolve 对其匹配条件没有作用，可取消该选项')
+      if ((!DESTINATION_IP_RULE_TYPES.has(String(rule.type)) && !COMMA_PAYLOAD_RULE_TYPES.has(String(rule.type))) || provider?.behavior === 'domain') {
+        addIssue(warnings, 'RULE_NO_RESOLVE_INEFFECTIVE', `${rulePath}.noResolve`, '当前规则不依赖目标 IP，no-resolve 对其匹配条件没有作用，可取消该选项')
       } else if (rule.type === 'GEOIP' && typeof rule.value === 'string' && ['CN', 'LAN'].includes(rule.value.trim().toUpperCase())) {
         addIssue(warnings, 'RULE_GEOIP_NO_RESOLVE', `${rulePath}.noResolve`, `GEOIP,${rule.value.trim().toUpperCase()} 启用 no-resolve 后不会为匹配触发目标 DNS 解析；Fake-IP 场景下尚无真实目标 IP 的域名可能跳过此规则，请确认符合预期`)
       }
@@ -684,13 +687,25 @@ function validateRules(
     } else {
       if (!isNonEmptyString(rule.value)) {
         addIssue(errors, 'RULE_VALUE_REQUIRED', `${rulePath}.value`, `${String(rule.type)} 规则必须填写匹配内容`)
+      } else {
+        const valueError = getRuleValueError(String(rule.type), rule.value, providerNames)
+        if (valueError) addIssue(errors, 'RULE_VALUE_INVALID', `${rulePath}.value`, valueError)
       }
       if (isNonEmptyString(rule.providerId)) {
         addIssue(errors, 'RULE_PROVIDER_FORBIDDEN', `${rulePath}.providerId`, '只有 RULE-SET 规则可以引用规则提供者')
       }
     }
 
-    if (!isNonEmptyString(rule.targetGroupId)) {
+    if (rule.type === 'SUB-RULE') {
+      if (!isNonEmptyString(rule.subRuleName) || /[,\r\n]/.test(rule.subRuleName)) {
+        addIssue(errors, 'RULE_SUB_RULE_REQUIRED', `${rulePath}.subRuleName`, 'SUB-RULE 必须指定子规则名称，且不能包含逗号或换行')
+      } else {
+        const definition = Object.hasOwn(subRules, rule.subRuleName) ? subRules[rule.subRuleName] : undefined
+        if (!Array.isArray(definition) || !definition.length || definition.some((line) => !isNonEmptyString(line))) {
+          addIssue(errors, 'RULE_SUB_RULE_NOT_FOUND', `${rulePath}.subRuleName`, `请在基础 YAML 的 sub-rules 中定义非空规则列表：${rule.subRuleName}`)
+        }
+      }
+    } else if (!isNonEmptyString(rule.targetGroupId)) {
       addIssue(errors, 'RULE_TARGET_REQUIRED', `${rulePath}.targetGroupId`, '启用的路由规则必须指定目标策略组或内置目标')
     } else {
       const target = rule.targetGroupId
@@ -749,9 +764,17 @@ export function validateRoutingConfig(input: unknown): RoutingValidationResult {
   }
 
   validateBaseYaml(input.baseYaml, errors)
+  // 基础模板已经独立报告语法错误；这里仅提取跳转引用，损坏模板不会令接口抛异常。
+  let subRules: UnknownRecord = {}
+  if (typeof input.baseYaml === 'string') {
+    try {
+      const base: unknown = YAML.parse(input.baseYaml)
+      if (isRecord(base) && isRecord(base['sub-rules'])) subRules = base['sub-rules']
+    } catch { /* 语法错误由 validateBaseYaml 返回。 */ }
+  }
   const { enabledGroupsById } = validateGroups(input.groups, errors)
   const enabledProvidersById = validateProviders(input.providers, errors)
-  validateRules(input.rules, enabledGroupsById, enabledProvidersById, errors, warnings)
+  validateRules(input.rules, enabledGroupsById, enabledProvidersById, subRules, errors, warnings)
 
   return {
     valid: errors.length === 0,

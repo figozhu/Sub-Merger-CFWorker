@@ -182,12 +182,12 @@ describe('空策略组裁剪与完整 YAML 容错', () => {
     ])
   })
 
-  it('只替换嵌套逻辑规则最外层策略，保留备注、尾部选项和 SUB-RULE 子规则名称', () => {
-    const source = `# 自定义基础说明\nproxies: []\nproxy-groups:\n  - name: 空组\n    type: select\n    proxies: []\nrules:\n  # 复杂规则说明\n  - AND,((DOMAIN,example.com),(OR,((NETWORK,TCP),(DST-PORT,443)))),空组,no-resolve\n  - NOT,((DOMAIN-SUFFIX,example.org)),空组,no-resolve\n  - SUB-RULE,(NETWORK,TCP),自定义子规则\n  # 最终兜底\n  - MATCH,DIRECT\n`
+  it('只替换嵌套逻辑规则最外层策略，保留备注、内部选项和 SUB-RULE 子规则名称', () => {
+    const source = `# 自定义基础说明\nproxies: []\nproxy-groups:\n  - name: 空组\n    type: select\n    proxies: []\nrules:\n  # 复杂规则说明\n  - AND,((DOMAIN,example.com),(OR,((NETWORK,TCP),(IP-CIDR,192.0.2.0/24,no-resolve)))),空组\n  - NOT,((IP-CIDR,198.51.100.0/24,no-resolve)),空组\n  - SUB-RULE,(NETWORK,TCP),自定义子规则\n  # 最终兜底\n  - MATCH,DIRECT\n`
     const result = sanitizeProxyGroupYaml(source)
     expect(YAML.parse(result).rules).toEqual([
-      'AND,((DOMAIN,example.com),(OR,((NETWORK,TCP),(DST-PORT,443)))),DIRECT,no-resolve',
-      'NOT,((DOMAIN-SUFFIX,example.org)),DIRECT,no-resolve',
+      'AND,((DOMAIN,example.com),(OR,((NETWORK,TCP),(IP-CIDR,192.0.2.0/24,no-resolve)))),DIRECT',
+      'NOT,((IP-CIDR,198.51.100.0/24,no-resolve)),DIRECT',
       'SUB-RULE,(NETWORK,TCP),自定义子规则', 'MATCH,DIRECT',
     ])
     expect(result).toContain('# 自定义基础说明')
@@ -197,14 +197,14 @@ describe('空策略组裁剪与完整 YAML 容错', () => {
   })
 
   it('同步修复 sub-rules 中失效的策略引用，保留子规则名称、备注和规则选项', () => {
-    const source = `proxies: []\nproxy-groups:\n  - name: 空机场\n    type: select\n    proxies: []\n  - name: 有效选择\n    type: select\n    proxies: [DIRECT]\nsub-rules:\n  自定义子规则:\n    # 子规则代理说明\n    - DOMAIN,example.com,空机场,no-resolve\n    - AND,((NETWORK,TCP),(DST-PORT,443)),空机场,no-resolve\n    - SUB-RULE,(NETWORK,UDP),更深子规则\n    - MATCH,空机场\n  更深子规则:\n    - DOMAIN,keep.example,DIRECT,no-resolve\nrules:\n  - SUB-RULE,(NETWORK,TCP),自定义子规则\n  - MATCH,有效选择\n`
+    const source = `proxies: []\nproxy-groups:\n  - name: 空机场\n    type: select\n    proxies: []\n  - name: 有效选择\n    type: select\n    proxies: [DIRECT]\nsub-rules:\n  自定义子规则:\n    # 子规则代理说明\n    - DOMAIN,example.com,空机场,no-resolve\n    - AND,((NETWORK,TCP),(IP-CIDR,192.0.2.0/24,no-resolve)),空机场\n    - SUB-RULE,(NETWORK,UDP),更深子规则\n    - MATCH,空机场\n  更深子规则:\n    - DOMAIN,keep.example,DIRECT,no-resolve\nrules:\n  - SUB-RULE,(NETWORK,TCP),自定义子规则\n  - MATCH,有效选择\n`
     const result = sanitizeProxyGroupYaml(source)
     const parsed = YAML.parse(result)
 
     expect(parsed['sub-rules']).toEqual({
       自定义子规则: [
         'DOMAIN,example.com,有效选择,no-resolve',
-        'AND,((NETWORK,TCP),(DST-PORT,443)),有效选择,no-resolve',
+        'AND,((NETWORK,TCP),(IP-CIDR,192.0.2.0/24,no-resolve)),有效选择',
         'SUB-RULE,(NETWORK,UDP),更深子规则',
         'MATCH,有效选择',
       ],
@@ -213,6 +213,14 @@ describe('空策略组裁剪与完整 YAML 容错', () => {
     expect(parsed.rules).toEqual(['SUB-RULE,(NETWORK,TCP),自定义子规则', 'MATCH,有效选择'])
     expect(result).toMatch(/# 子规则代理说明\n\s*- DOMAIN,example.com,有效选择,no-resolve/)
     expect(sanitizeProxyGroupYaml(result)).toBe(result)
+  })
+
+  it('旧缓存的小写逻辑规则和 SUB-RULE 保持语义，match 仍提供兜底策略', () => {
+    const parsed = YAML.parse(sanitizeProxyGroupYaml(YAML.stringify({
+      proxies: [], 'proxy-groups': [],
+      rules: ['and,((NETWORK,tcp),(DST-PORT,443)),失效目标', 'sub-rule,(NETWORK,tcp),子规则', 'match,DIRECT'],
+    })))
+    expect(parsed.rules).toEqual(['and,((NETWORK,tcp),(DST-PORT,443)),DIRECT', 'sub-rule,(NETWORK,tcp),子规则', 'match,DIRECT'])
   })
 
   it('旧 YAML 中 provider 动态组、内置策略、未知基础及组字段保持完整', () => {
